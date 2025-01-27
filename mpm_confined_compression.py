@@ -334,7 +334,7 @@ def flux_run(characteristic_length: Annotated[float, typer.Argument(min=1)], top
 
     handle = flux.Flux()
     jobspec = JobspecV1.from_batch_command(
-        f"{script_file}", "ratel_mpm_{topology.value}_CL{int(characteristic_length):03}", num_slots=n, num_cores_per_slot=24, num_gpus_per_slot=1, num_nodes=num_nodes
+        f"{script_file}", "ratel_mpm_{topology.value}_CL{int(characteristic_length):03}", num_slots=n, num_cores_per_slot=24, num_gpus_per_slot=1, num_nodes=num_nodes, exclusive=True
     )
     jobspec.environment = dict(os.environ)
     typer.secho(f"Submitting job with command: {command}")
