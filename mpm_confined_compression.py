@@ -1,15 +1,12 @@
+#!/usr/bin/env python3
+
 import typer
 import enum
 from pathlib import Path
 import subprocess
 from os import environ as env
 from typing_extensions import Annotated
-import matplotlib.pyplot as plt
-import cycler
-from cmcrameri import cm
 import numpy as np
-import pandas as pd
-from dataclasses import dataclass
 import datetime
 import shutil
 import tempfile
@@ -17,31 +14,6 @@ import os
 
 app = typer.Typer()
 
-plt.rcParams["text.usetex"] = True
-plt.rcParams["font.family"] = "serif"
-plt.rcParams[
-    "text.latex.preamble"
-] = r"""
-\usepackage[T1]{fontenc}
-\usepackage{newpxtext,newpxmath}
-\usepackage{amsmath}
-\usepackage{bm}
-"""
-
-base_scale = 1.5
-
-marker_cycler: cycler.Cycler = plt.cycler('marker', 25 * ['o', 's', '+', 'x'])
-markersize_cycler: cycler.Cycler = plt.cycler(
-    'markersize', 25 * [3.5 * base_scale, 3 * base_scale, 5 * base_scale, 4 * base_scale])
-linestyle_cycler: cycler.Cycler = plt.cycler('linestyle',
-                                             20 * [(0, (1, 1)), '-', (0, (5, 1, 1, 1)), '--', (0, (3, 1, 1, 1, 1, 1))]
-                                             )
-
-default_cycler: cycler.Cycler = plt.cycler('color', cm.batlowS.colors) + marker_cycler + markersize_cycler
-plt.rcParams['axes.prop_cycle'] = default_cycler
-plt.rcParams['lines.linewidth'] = 1 * base_scale
-plt.rcParams["font.size"] = 16
-# plt.rcParams["font.size"] = 10
 
 RATEL_DIR = Path(env['HOME']) / "project" / "micromorph" / "ratel"
 RATEL_EXE = RATEL_DIR / "bin" / "ratel-quasistatic"
@@ -70,6 +42,7 @@ def get_cylinder_mesh(characteristic_length, height_scale: float = 1):
         mesh_file = Path("meshes") / f"cylinder_CL{int(characteristic_length):03}.msh"
     if mesh_file.exists():
         return ["-dm_plex_filename", f"{mesh_file}"]
+    (Path(__file__).parent / "meshes").mkdir(exist_ok=True)
     cmd = [
         "gmsh",
         "-3",
@@ -102,58 +75,9 @@ def get_cube_mesh(characteristic_length):
     ]
     return options
 
-# def make_filename(name: str, sample: SampleType, kappa: float, sym: bool, name_extra: str = ""):
-#     sym_text = "-sym" if sym else ""
-#     return f"{name}_{sample}-{kappa}{sym_text}{name_extra}"
-
-
-# def load_experiment_data(sample: SampleType, kappa: float, sym: bool = False, name_extra: str = ""):
-#     data_path = Path.cwd() / f"{make_filename('forces', sample, kappa, sym, name_extra)}_5.csv"
-#     if not data_path.exists():
-#         typer.secho(f"Data for {sample} and kappa {kappa} not found", fg=typer.colors.RED)
-#         raise typer.Exit(code=1)
-#     data = pd.read_csv(data_path)
-#     if sym:
-#         data['displacement'] = (data['centroid_x'] - data['centroid_x'][0])
-#         data['force'] = -data['force_x']
-#     else:
-#         data['displacement'] = data['centroid_x'] - data['centroid_x'][0]
-#         data['force'] = -data['force_x']
-#     return data
-
-
-# @app.command()
-# def plot(sample: Annotated[list[SampleType], typer.Option("-s")], kappa: Annotated[list[float], typer.Option("-k")],
-#          out: Annotated[Path, typer.Option()] = None, show: bool = False, sym: bool = False, name_extra: str = "") -> None:
-#     fig, ax = plt.subplots(figsize=(9.352, 5))
-#     for s, k in zip(sample, kappa):
-#         data = load_abaqus_data(s, k, sym)
-#         ax.plot(data['displacement'], data['force'], label=fr"Abaqus, {s.abrev()}, $\kappa={k}$", markevery=0.025)
-
-#         data = load_experiment_data(s, k, sym, name_extra)
-#         ax.plot(data['displacement'], data['force'], label=fr"Ratel, {s.abrev()}, $\kappa={k}$", markevery=0.025)
-
-#         # data = load_reference_data(s, k)
-#         # ax.plot(
-#         #     data['displacement'],
-#         #     data['force'],
-#         #     label=fr"Gasser et al., {s.abrev()}, $\kappa={k}$",
-#         #     markevery=0.025)
-
-#     ax.set_xlabel(r"Displacement $u$ [mm]")
-#     ax.set_ylabel(r"Force $f$ [N]")
-#     ax.legend()
-#     ax.grid()
-#     fig.tight_layout()
-#     if out is not None:
-#         fig.savefig(out)
-#     if show:
-#         plt.show()
-
-
 @app.command()
-def run(characteristic_length: Annotated[float, typer.Argument(min=1)], topology: Topology, out: Annotated[Path, typer.Option()] = None, n: Annotated[int, typer.Option(
-        min=1)] = 1, height_scale: float = 1, dry_run: bool = False, ceed: str = '/cpu/self', additional_args: str = "", ratel_path: Annotated[Path, typer.Option()] = None) -> None:
+def run(characteristic_length: Annotated[float, typer.Argument(min=1)], topology: Topology, ratel_path: Annotated[Path, typer.Argument(envvar='RATEL_DIR')],out: Annotated[Path, typer.Option()] = None, n: Annotated[int, typer.Option(
+        min=1)] = 1, height_scale: float = 1, dry_run: bool = False, ceed: str = '/cpu/self', additional_args: str = "") -> None:
     typer.secho(f"Running experiment with mesh characteristic length {characteristic_length}", fg=typer.colors.GREEN)
     if out is None:
         out = Path.cwd() / \
@@ -186,8 +110,8 @@ def run(characteristic_length: Annotated[float, typer.Argument(min=1)], topology
     ]
     out_file = out / "stdout.txt"
     err_file = out / "stderr.txt"
-
-    cmd_arr = ["mpirun", "-np", f"{np}", f"{RATEL_EXE}", *options] if np > 1 else [f"{RATEL_EXE}", *options]
+    ratel_exe = ratel_path / 'bin' / 'ratel-quasistatic'
+    cmd_arr = ["mpirun", "-np", f"{np}", f"{ratel_exe}", *options] if np > 1 else [f"{ratel_exe}", *options]
     typer.secho(f"Running:\n  > {' '.join(cmd_arr)}", fg=typer.colors.BRIGHT_BLACK)
 
     if dry_run:
@@ -195,11 +119,7 @@ def run(characteristic_length: Annotated[float, typer.Argument(min=1)], topology
         return
     try:
         with out_file.open("wb") as out_f, err_file.open("wb") as err_f:
-            if (np > 1):
-                proc = subprocess.run(["mpirun", "-np", f"{np}", f"{RATEL_EXE}",
-                                      *options], stdout=out_f, stderr=err_f)
-            else:
-                proc = subprocess.run([f"{RATEL_EXE}", *options], stdout=out_f, stderr=err_f)
+            proc = subprocess.run(cmd_arr, stdout=out_f, stderr=err_f)
     except subprocess.CalledProcessError as e:
         typer.secho(f"Error: process returned {e.returncode}", fg=typer.colors.RED)
         typer.echo(e.stderr.decode())
@@ -215,15 +135,12 @@ def run(characteristic_length: Annotated[float, typer.Argument(min=1)], topology
 
 SCRIPT_PATH = Path(__file__).parent / 'flux_scripts'
 
+CORES_PER_SLOT = 24
+GPUS_PER_NODE = 4
 
-@app.command
+@app.command()
 def flux_run(characteristic_length: Annotated[float, typer.Argument(min=1)], topology: Topology, ratel_path: Annotated[Path, typer.Argument(envvar='RATEL_DIR')], height_scale: float = 1, n: int = 1,
              dry_run: bool = False, ceed: str = '/gpu/hip/gen', additional_args: str = ""):
-    # ignore formatting
-    # pylint: disable=import-outside-toplevel
-    import flux
-    from flux.job import JobspecV1
-    # pylint: enable
 
     typer.secho(
         f"Using Flux to run experiment with mesh characteristic length {characteristic_length}",
@@ -249,20 +166,20 @@ def flux_run(characteristic_length: Annotated[float, typer.Argument(min=1)], top
     ]
 
     command = f"{ratel_path / 'bin' / 'ratel-quasistatic'} {' '.join(options)}"
-    num_nodes = int(np.ceil(n / 4))
+    num_nodes = int(np.ceil(n / GPUS_PER_NODE))
 
     if not SCRIPT_PATH.exists():
         SCRIPT_PATH.mkdir()
 
     script_file = None
-    with tempfile.NamedTemporaryFile(dir=SCRIPT_PATH, delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode='w', dir=SCRIPT_PATH, delete=False) as f:
         script_file = Path(f.name)
-        f.writelines([
+        f.write('\n'.join([
             '#!/bin/bash',
             '',
             f'#flux: -N {num_nodes}',
             f'#flux: -n {n}',
-            '#flux: -c 24',
+            f'#flux: -c {CORES_PER_SLOT}',
             '#flux: -g 1',
             '#flux: -x',
             '#flux: -t 12h',
@@ -294,13 +211,13 @@ def flux_run(characteristic_length: Annotated[float, typer.Argument(min=1)], top
             '',
             'echo ""',
             'echo "-->Job information"',
-            'echo "Job ID = ${{CENTER_JOB_ID}}"',
+            'echo "Job ID = $CENTER_JOB_ID"',
             'echo "Flux Resources = $(flux resource info)"',
             '',
             'export HSA_XNACK=1',
             'export MPICH_GPU_SUPPORT_ENABLED=1',
             '',
-            f'export SCRATCH={scratch_dir}/MPM-{topology.value}-CL{int(characteristic_length):03}',
+            f'export SCRATCH={scratch_dir}/MPM-{topology.value}-CL{int(characteristic_length):03}-$CENTER_JOB_ID',
             'echo ""',
             'echo "Scratch = $SCRATCH"',
             'echo ""',
@@ -311,16 +228,17 @@ def flux_run(characteristic_length: Annotated[float, typer.Argument(min=1)], top
             'echo ""',
             'echo "-->Moving into scratch directory"',
             'echo ""',
-            'cd $SCRATCH'
-            'cp $INPUT_DIRECTORY/Material_Options.yml $SCRATCH'
-            'cp $INPUT_DIRECTORY/Ratel_Solver_Options.yml $SCRATCH'
-            f'cp {mesh_options[1]} $SCRATCH' if topology == Topology.CYLINDER else '',
+            'cd $SCRATCH',
+            'cp $INPUT_DIRECTORY/Material_Options.yml $SCRATCH',
+            'cp $INPUT_DIRECTORY/Ratel_Solver_Options.yml $SCRATCH',
+            'mkdir $SCRATCH/meshes',
+            f'cp $INPUT_DIRECTORY/{mesh_options[1]} $SCRATCH/{mesh_options[1]}' if topology == Topology.CYLINDER else '',
             f'',
             'echo ""',
             'echo "-->Starting simulation at $(date)"',
             'echo ""',
             '',
-            f'flux run -N1 -n4 -c24 --gpus-per-task=1 --verbose --exclusive --setopt=mpibind=verbose:1 \\',
+            f'flux run -N{num_nodes} -n{n} -c{CORES_PER_SLOT} --gpus-per-task=1 --verbose --exclusive --setopt=mpibind=verbose:1 \\',
             f'  {command} > $SCRATCH/run.log 2>&1',
             '',
             'echo ""',
@@ -330,16 +248,15 @@ def flux_run(characteristic_length: Annotated[float, typer.Argument(min=1)], top
             'echo "~~~~~~~~~~~~~~~~~~~"',
             'echo "All done! Bye!"',
             'echo "~~~~~~~~~~~~~~~~~~~"',
-        ])
+        ]))
 
-    handle = flux.Flux()
-    jobspec = JobspecV1.from_batch_command(
-        f"{script_file}", "ratel_mpm_{topology.value}_CL{int(characteristic_length):03}", num_slots=n, num_cores_per_slot=24, num_gpus_per_slot=1, num_nodes=num_nodes, exclusive=True
-    )
-    jobspec.environment = dict(os.environ)
     typer.secho(f"Submitting job with command: {command}")
-    typer.secho(f"Job submitted with ID {flux.job.submit(handle, jobspec)}")
-    # script_file.unlink()
+    proc = subprocess.run(["flux", "batch", "-N", f"{num_nodes}", "-n", f"{n}", '-x', "-g", "1", "-c", f"{CORES_PER_SLOT}", f"{script_file}"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if proc.returncode != 0:
+        typer.secho(f"Return code {proc.returncode}: {proc.stderr.decode()}", fg=typer.colors.RED)
+    else:
+        typer.secho(f"Job submitted with ID {proc.stdout.decode()}", fg=typer.colors.GREEN)
+    script_file.unlink()
 
 
 if __name__ == "__main__":
