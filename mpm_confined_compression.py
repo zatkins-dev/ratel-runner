@@ -14,7 +14,6 @@ import os
 
 app = typer.Typer()
 
-
 RATEL_DIR = Path(env['HOME']) / "project" / "micromorph" / "ratel"
 RATEL_EXE = RATEL_DIR / "bin" / "ratel-quasistatic"
 OPTIONS_FILE = Path(__file__).parent / "Material_Options.yml"
@@ -37,9 +36,9 @@ def get_mesh(characteristic_length, topology=Topology.CYLINDER, height_scale: fl
 
 def get_cylinder_mesh(characteristic_length, height_scale: float = 1):
     if height_scale != 1:
-        mesh_file = Path("meshes") / f"cylinder_height{height_scale}_CL{int(characteristic_length):03}.msh"
+        mesh_file = Path(__file__).parent / "meshes" / f"cylinder_height{height_scale}_CL{int(characteristic_length):03}.msh"
     else:
-        mesh_file = Path("meshes") / f"cylinder_CL{int(characteristic_length):03}.msh"
+        mesh_file = Path(__file__).parent / "meshes" / f"cylinder_CL{int(characteristic_length):03}.msh"
     if mesh_file.exists():
         return ["-dm_plex_filename", f"{mesh_file}"]
     (Path(__file__).parent / "meshes").mkdir(exist_ok=True)
