@@ -12,6 +12,8 @@ import pandas as pd
 from dataclasses import dataclass
 import datetime
 import shutil
+import tempfile
+import os
 
 app = typer.Typer()
 
@@ -150,8 +152,8 @@ def get_cube_mesh(characteristic_length):
 
 
 @app.command()
-def run(characteristic_length: Annotated[float, typer.Argument(min=1)], topology: Topology, out: Annotated[Path, typer.Option()] = None, np: Annotated[int, typer.Option(
-        min=1)] = 1, height_scale: float = 1, dry_run: bool = False, ceed: str = '/cpu/self', additional_args: str = "", sym: bool = False, name_extra: str = "") -> None:
+def run(characteristic_length: Annotated[float, typer.Argument(min=1)], topology: Topology, out: Annotated[Path, typer.Option()] = None, n: Annotated[int, typer.Option(
+        min=1)] = 1, height_scale: float = 1, dry_run: bool = False, ceed: str = '/cpu/self', additional_args: str = "", ratel_path: Annotated[Path, typer.Option()] = None) -> None:
     typer.secho(f"Running experiment with mesh characteristic length {characteristic_length}", fg=typer.colors.GREEN)
     if out is None:
         out = Path.cwd() / \
@@ -209,6 +211,135 @@ def run(characteristic_length: Annotated[float, typer.Argument(min=1)], topology
         raise typer.Exit(code=proc.returncode)
 
     typer.secho(f"Experiment with mesh characteristic length {characteristic_length}", fg=typer.colors.GREEN)
+
+
+SCRIPT_PATH = Path(__file__).parent / 'flux_scripts'
+
+
+@app.command
+def flux_run(characteristic_length: Annotated[float, typer.Argument(min=1)], topology: Topology, ratel_path: Annotated[Path, typer.Argument(envvar='RATEL_DIR')], height_scale: float = 1, n: int = 1,
+             dry_run: bool = False, ceed: str = '/gpu/hip/gen', additional_args: str = ""):
+    # ignore formatting
+    # pylint: disable=import-outside-toplevel
+    import flux
+    from flux.job import JobspecV1
+    # pylint: enable
+
+    typer.secho(
+        f"Using Flux to run experiment with mesh characteristic length {characteristic_length}",
+        fg=typer.colors.GREEN)
+
+    scratch_dir = f"/p/lustre5/{os.environ['USER']}/ratel"
+    Path(scratch_dir).mkdir(parents=True, exist_ok=True)
+
+    mesh_options = get_mesh(characteristic_length, topology, height_scale)
+    options = [
+        "-options_file", f"$SCRATCH/Material_Options.yml",
+        "-options_file", f"$SCRATCH/Ratel_Solver_Options.yml",
+        "-ceed", f"{ceed}",
+        "-binder_characteristic_length", f"{2*characteristic_length*1e-3}",
+        "-grains_characteristic_length", f"{2*characteristic_length*1e-3}",
+        *mesh_options,
+        "-ts_monitor_diagnostic_quantities", f"cgns:$SCRATCH/diagnostic_%06d.cgns",
+        "-ts_monitor_surface_force_per_face", f"ascii:$SCRATCH/forces.csv",
+        "-ts_monitor_strain_energy", f"ascii:$SCRATCH/strain_energy.csv",
+        "-ts_monitor_swarm", f"ascii:$SCRATCH/swarm.xmf",
+        "-bc_slip_2_translate", f"0,0,{-0.221015*height_scale}",
+        *additional_args.split()
+    ]
+
+    command = f"{ratel_path} {' '.join(options)}"
+    num_nodes = int(np.ceil(n / 4))
+
+    if not SCRIPT_PATH.exists():
+        SCRIPT_PATH.mkdir()
+
+    script_file = None
+    with tempfile.NamedTemporaryFile(dir=SCRIPT_PATH, delete=False) as f:
+        script_file = Path(f.name)
+        f.writelines([
+            '#!/bin/bash',
+            '',
+            f'#flux: -N {num_nodes}',
+            f'#flux: -n {n}',
+            '#flux: -c 24',
+            '#flux: -g 1',
+            '#flux: -x',
+            '#flux: -t 12h',
+            '#flux: -q pbatch',
+            '#flux: --output=output_{{id}}.txt',
+            f'#flux: --job-name=ratel_mpm_{topology.value}_CL{int(characteristic_length):03}',
+            '#flux: -B guests',
+            '#flux: --setattr=thp=always # Transparent Huge Pages',
+            '#flux: -l # Add task rank prefixes to each line of output.',
+            '',
+            f'export INPUT_DIRECTORY={Path(__file__).parent}',
+            '',
+            'echo "~~~~~~~~~~~~~~~~~~~"',
+            'echo "Welcome!"',
+            'echo "~~~~~~~~~~~~~~~~~~~"',
+            'echo ""',
+            'echo "-->Loading modules"',
+            'echo ""',
+            '',
+            'module reset',
+            'ml +rocmcc/6.1.2-cce-18.0.0-magic',
+            'ml +rocm/6.1.2',
+            'ml +craype-accel-amd-gfx942',
+            'ml +cray-python',
+            'ml +cray-libsci_acc',
+            'ml +cray-hdf5-parallel/1.14.3.3',
+            'ml +flux_wrappers',
+            'module list',
+            '',
+            'echo ""',
+            'echo "-->Job information"',
+            'echo "Job ID = ${{CENTER_JOB_ID}}"',
+            'echo "Flux Resources = $(flux resource info)"',
+            '',
+            'export HSA_XNACK=1',
+            'export MPICH_GPU_SUPPORT_ENABLED=1',
+            '',
+            f'export SCRATCH={scratch_dir}/MPM-{topology.value}-CL{int(characteristic_length):03}',
+            'echo ""',
+            'echo "Scratch = $SCRATCH"',
+            'echo ""',
+            '',
+            'mkdir -p $SCRATCH',
+            f'ln -s $SCRATCH $INPUT_DIRECTORY',
+            '',
+            'echo ""',
+            'echo "-->Moving into scratch directory"',
+            'echo ""',
+            'cd $SCRATCH'
+            'cp $INPUT_DIRECTORY/Material_Options.yml $SCRATCH'
+            'cp $INPUT_DIRECTORY/Ratel_Solver_Options.yml $SCRATCH'
+            f'cp {mesh_options[1]} $SCRATCH' if topology == Topology.CYLINDER else '',
+            f'',
+            'echo ""',
+            'echo "-->Starting simulation at $(date)"',
+            'echo ""',
+            '',
+            f'flux run -N1 -n4 -c24 --gpus-per-task=1 --verbose --exclusive --setopt=mpibind=verbose:1 \\',
+            f'  {command} > $SCRATCH/run.log 2>&1',
+            '',
+            'echo ""',
+            'echo "-->Simulation finished at $(date)"',
+            'echo ""',
+            '',
+            'echo "~~~~~~~~~~~~~~~~~~~"',
+            'echo "All done! Bye!"',
+            'echo "~~~~~~~~~~~~~~~~~~~"',
+        ])
+
+    handle = flux.Flux()
+    jobspec = JobspecV1.from_batch_command(
+        f"{script_file}", "ratel_mpm_{topology.value}_CL{int(characteristic_length):03}", num_slots=n, num_cores_per_slot=24, num_gpus_per_slot=1, num_nodes=num_nodes
+    )
+    jobspec.environment = dict(os.environ)
+    typer.secho(f"Submitting job with command: {command}")
+    typer.secho(f"Job submitted with ID {flux.job.submit(handle, jobspec)}")
+    # script_file.unlink()
 
 
 if __name__ == "__main__":

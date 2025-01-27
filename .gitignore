@@ -6,3 +6,4 @@ meshes/*
 *.csv
 *.txt
 *.xmf
+flux_scripts/*
