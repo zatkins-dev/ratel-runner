@@ -1,0 +1,68 @@
+# misc
+diagnostic_order: 1
+
+# TS
+ts:
+  dt: 0.005
+  rtol: 1e-3
+  max_snes_failures: -1
+  adapt:
+    type: basic
+    clip: 0.5,1.5
+    dt:
+      min: 1e-8
+      max: 1e-2
+    monitor:
+  view:
+  monitor:
+  monitor_diagnostic_quantities_interval: 10
+
+# SNES
+snes:
+  type: newtonls
+  linesearch:
+    type: bisection
+    monitor:
+  max_it: 50
+
+  monitor:
+  rtol: 1e-7
+  stol: 1e-12
+  ksp:
+    ew:
+    ew_version: 3
+    ew_rtol0: 1e-4
+    ew_rtolmax: 1e-3
+
+
+# snes:
+#   type: ngmres
+#   qn:
+#     type: lbfgs
+#     m: 50
+#     restart_type: powell
+#     scale_type: diagonal
+#   # linesearch:
+#   #   type: bisection
+#   monitor:
+#   rtol: 1e-7
+#   stol: 1e-12
+
+# KSP
+ksp:
+  type: gmres
+  norm_type: preconditioned
+  gmres_restart: 500
+  max_it: 1000
+  # max_it: 1000
+  rtol: 1e-6
+  gmres_modifiedgramschmidt:
+  pc_side: symmetric
+  # gmres_cgs_refinement_type: refine_ifneeded
+  converged:
+    reason:
+    maxits:
+
+# Preconditioner
+pc:
+  type: jacobi

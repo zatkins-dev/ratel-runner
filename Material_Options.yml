@@ -1,0 +1,88 @@
+orders: 1
+diagnostic_order: 1
+
+method: mpm
+mpm:
+  point_location_type: uniform
+  num_points_per_cell: 27
+dm_plex_dim: 3
+dm_plex_simplex: 0
+
+# material: grains,binder
+material: grains
+
+grains:
+  model: elasticity-mpm-neo-hookean-damage-current
+  E: 22000
+  nu: 0.25
+  fracture_toughness: 1.830
+  characteristic_length: 0.060
+  # damage_viscosity: 0.1
+  rho: 2001.0
+  use_AT1: false
+  residual_stiffness: 0.0001
+  label:
+    value: 1
+
+# material: binder
+
+# binder:
+#   model: elasticity-mpm-neo-hookean-damage-current
+#   E: 279.4 # MPa
+#   nu: 0.25
+#   fracture_toughness: 0.00121 # MPa * mm
+#   characteristic_length: 0.060
+#   damage_scaling: 1
+#   rho: 1190.0 # horribly wrong
+#   # damage_viscosity: 0.28
+#   use_AT1: false
+#   residual_stiffness: 0.0001
+#   label:
+#     value: 1
+
+# Two Platens
+bc:
+  slip: 1,2,3
+  slip_1_components: 0,1,2
+  slip_2:
+    components: 0,1,2
+    translate: 0,0,-0.221015
+  slip_3_components: 0,1
+  # allow_no_clamp:
+  # platen: 3,4
+  # platen_3:
+  #   normal: 0,0,-1
+  #   center: 0,0,4965.31103516
+  #   distance: 110
+  #   type: nitsche
+  #   gamma: 45000 #Ratel docs suggest 100x Young's Modulus
+  #   friction:
+  #     type: coulomb
+  #     kinetic: 0
+  #     viscous: 0.01
+  #     #tolerance_velocity: 50
+  # platen_4:
+  #   normal: 0,0,1
+  #   center: 0,0,563.9350585937505
+  #   distance: 110
+  #   type: nitsche
+  #   gamma: 45000 #Ratel docs suggest 100x Young's Modulus
+  #   friction:
+  #     type: coulomb
+  #     kinetic: 0
+  #     viscous: 0.01
+  #     #tolerance_velocity: 50
+
+# height = 4420.3
+# distance = 221.015
+# => scale = 1 - 221.015 / 4420.3 = 0.95
+remap:
+  direction: z
+  scale: 0.95
+
+ic:
+  random_damage: 1e-4
+
+surface_force_faces: 1,2
+
+viewer_cgns_batch_size: 1
