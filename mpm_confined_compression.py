@@ -248,7 +248,7 @@ def flux_run(characteristic_length: Annotated[float, typer.Argument(min=1)], top
         *additional_args.split()
     ]
 
-    command = f"{ratel_path} {' '.join(options)}"
+    command = f"{ratel_path / 'bin' / 'ratel-quasistatic'} {' '.join(options)}"
     num_nodes = int(np.ceil(n / 4))
 
     if not SCRIPT_PATH.exists():
