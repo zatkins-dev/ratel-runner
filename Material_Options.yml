@@ -80,9 +80,6 @@ remap:
   direction: z
   scale: 0.95
 
-ic:
-  random_damage: 1e-4
-
 surface_force_faces: 1,2
 
 viewer_cgns_batch_size: 1

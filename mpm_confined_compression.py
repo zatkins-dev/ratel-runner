@@ -36,7 +36,8 @@ def get_mesh(characteristic_length, topology=Topology.CYLINDER, height_scale: fl
 
 def get_cylinder_mesh(characteristic_length, height_scale: float = 1):
     if height_scale != 1:
-        mesh_file = Path(__file__).parent / "meshes" / f"cylinder_height{height_scale}_CL{int(characteristic_length):03}.msh"
+        mesh_file = Path(__file__).parent / "meshes" / \
+            f"cylinder_height{height_scale}_CL{int(characteristic_length):03}.msh"
     else:
         mesh_file = Path(__file__).parent / "meshes" / f"cylinder_CL{int(characteristic_length):03}.msh"
     if mesh_file.exists():
@@ -74,8 +75,9 @@ def get_cube_mesh(characteristic_length):
     ]
     return options
 
+
 @app.command()
-def run(characteristic_length: Annotated[float, typer.Argument(min=1)], topology: Topology, ratel_path: Annotated[Path, typer.Argument(envvar='RATEL_DIR')],out: Annotated[Path, typer.Option()] = None, n: Annotated[int, typer.Option(
+def run(characteristic_length: Annotated[float, typer.Argument(min=1)], topology: Topology, ratel_path: Annotated[Path, typer.Argument(envvar='RATEL_DIR')], out: Annotated[Path, typer.Option()] = None, n: Annotated[int, typer.Option(
         min=1)] = 1, height_scale: float = 1, dry_run: bool = False, ceed: str = '/cpu/self', additional_args: str = "") -> None:
     typer.secho(f"Running experiment with mesh characteristic length {characteristic_length}", fg=typer.colors.GREEN)
     if out is None:
@@ -103,14 +105,14 @@ def run(characteristic_length: Annotated[float, typer.Argument(min=1)], topology
         "-ts_monitor_diagnostic_quantities", f"cgns:{out}/diagnostic_%06d.cgns",
         "-ts_monitor_surface_force_per_face", f"ascii:{out}/forces.csv",
         "-ts_monitor_strain_energy", f"ascii:{out}/strain_energy.csv",
-        "-ts_monitor_swarm", f"ascii:{out}/swarm.xmf",
+        "-ts_monitor_swarm", f"ascii:{out.absolute()}/swarm.xmf",
         "-bc_slip_2_translate", f"0,0,{-0.221015*height_scale}",
         * additional_args.split()
     ]
     out_file = out / "stdout.txt"
     err_file = out / "stderr.txt"
     ratel_exe = ratel_path / 'bin' / 'ratel-quasistatic'
-    cmd_arr = ["mpirun", "-np", f"{np}", f"{ratel_exe}", *options] if np > 1 else [f"{ratel_exe}", *options]
+    cmd_arr = ["mpirun", "-np", f"{n}", f"{ratel_exe}", *options] if n > 1 else [f"{ratel_exe}", *options]
     typer.secho(f"Running:\n  > {' '.join(cmd_arr)}", fg=typer.colors.BRIGHT_BLACK)
 
     if dry_run:
@@ -136,6 +138,7 @@ SCRIPT_PATH = Path(__file__).parent / 'flux_scripts'
 
 CORES_PER_SLOT = 24
 GPUS_PER_NODE = 4
+
 
 @app.command()
 def flux_run(characteristic_length: Annotated[float, typer.Argument(min=1)], topology: Topology, ratel_path: Annotated[Path, typer.Argument(envvar='RATEL_DIR')], height_scale: float = 1, n: int = 1,
@@ -249,7 +252,8 @@ def flux_run(characteristic_length: Annotated[float, typer.Argument(min=1)], top
         ]))
 
     typer.secho(f"Submitting job with command: {command}")
-    proc = subprocess.run(["flux", "batch", "-N", f"{num_nodes}", "-n", f"{n}", '-x', "-g", "1", "-c", f"{CORES_PER_SLOT}", f"{script_file}"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    command = ["flux", "batch", "-N", f"{num_nodes}", "-n", f"{n}", '-x', "-g", "1", f"{script_file}"]
+    proc = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if proc.returncode != 0:
         typer.secho(f"Return code {proc.returncode}: {proc.stderr.decode()}", fg=typer.colors.RED)
     else:
