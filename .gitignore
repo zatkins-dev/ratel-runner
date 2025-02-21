@@ -7,3 +7,4 @@ meshes/*
 *.txt
 *.xmf
 flux_scripts/*
+*.yml

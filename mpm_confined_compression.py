@@ -11,58 +11,199 @@ import datetime
 import shutil
 import tempfile
 import os
+import gmsh
+import yaml
+import logging
+from rich.console import Console
+from rich.logging import RichHandler
+from rich.theme import Theme
+from rich.pretty import pprint
+
+
+custom_theme = Theme({
+    "info": "dim white",
+    "warning": "bold yellow",
+    "error": "bold red",
+    "success": "bold green",
+    "h1": "bold underline green",
+    "h2": "bold underline white",
+})
 
 app = typer.Typer()
+
+FORMAT = "%(message)s"
+logging.basicConfig(
+    level=logging.WARNING, format=FORMAT, datefmt="[%X]", handlers=[RichHandler()]
+)
+
+log = logging.getLogger("mpm_confined_compression")
+log.setLevel(logging.INFO)
+console = Console(theme=custom_theme)
 
 RATEL_DIR = Path(env['HOME']) / "project" / "micromorph" / "ratel"
 RATEL_EXE = RATEL_DIR / "bin" / "ratel-quasistatic"
 OPTIONS_FILE = Path(__file__).parent / "Material_Options.yml"
+OPTIONS_FILE_MATERIAL_MESH = Path(__file__).parent / "Material_Options_MaterialMesh.yml"
 SOLVER_OPTIONS_FILE = Path(__file__).parent / "Ratel_Solver_Options.yml"
+
+
+def get_bounding_box(mesh_file: Path):
+    gmsh.initialize()
+    gmsh.open(str(mesh_file))
+    bbox = gmsh.model.getBoundingBox(-1, -1)
+    gmsh.finalize()
+    return np.asarray([bbox[0], bbox[1], bbox[2]]), np.asarray([bbox[3], bbox[4], bbox[5]])
 
 
 class Topology(enum.Enum):
     CYLINDER = "cylinder"
     CUBE = "cube"
 
+    def __repr__(self):
+        return self.value
 
-def get_mesh(characteristic_length, topology=Topology.CYLINDER, height_scale: float = 1):
+    def __str__(self):
+        return self.value
+
+
+def get_mesh(characteristic_length, topology=Topology.CYLINDER,
+             height_scale: float = 1, material_mesh: Path = None):
+    console.print("[h1]Mesh Generation[/]\n")
     if topology == Topology.CYLINDER:
-        return get_cylinder_mesh(characteristic_length, height_scale)
+        return get_cylinder_mesh(characteristic_length, height_scale, material_mesh)
     elif topology == Topology.CUBE:
         return get_cube_mesh(characteristic_length, height_scale)
     else:
         raise ValueError(f"Unknown topology {topology}")
 
 
-def get_cylinder_mesh(characteristic_length, height_scale: float = 1):
-    if height_scale != 1:
+def get_cylinder_mesh(characteristic_length, height_scale: float = 1, material_mesh: Path = None):
+    if material_mesh is not None:
+        if not material_mesh.exists():
+            raise FileNotFoundError(f"Material mesh {material_mesh} does not exist")
+        if height_scale != 1:
+            log.warning("Warning: height_scale is ignored when using a material mesh")
+            height_scale = 1
+        mesh_file = Path(__file__).parent / "meshes" / \
+            f"cylinder_{material_mesh.stem}_CL{int(characteristic_length):03}.msh"
+    elif height_scale != 1:
         mesh_file = Path(__file__).parent / "meshes" / \
             f"cylinder_height{height_scale}_CL{int(characteristic_length):03}.msh"
     else:
         mesh_file = Path(__file__).parent / "meshes" / f"cylinder_CL{int(characteristic_length):03}.msh"
-    if mesh_file.exists():
-        return ["-dm_plex_filename", f"{mesh_file}"]
+    if mesh_file.exists() and mesh_file.with_suffix(".yml").exists():
+        console.print(f"[info]Using existing mesh [/]{mesh_file}")
+        return ["-options_file", f"{mesh_file.with_suffix('.yml')}"]
     (Path(__file__).parent / "meshes").mkdir(exist_ok=True)
-    cmd = [
-        "gmsh",
-        "-3",
-        "-setnumber",
-        "cl",
-        f"{characteristic_length}e-3",
-        "-setnumber",
-        "height_scale",
-        f"{height_scale}",
-        "cylinder.geo",
-        "-o",
-        f"{mesh_file}",
-    ]
-    typer.secho(f"Running:\n  > {' '.join(cmd)}", fg=typer.colors.BRIGHT_BLACK)
-    subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    return ["-dm_plex_filename", f"{mesh_file}"]
+
+    element_order = 1
+    center = np.array([0, 0, 0])
+    radius = 2534.72400368
+    height = 4420.35076904 * height_scale
+    if material_mesh is not None:
+        bbox_min, bbox_max = get_bounding_box(material_mesh)
+        center = (bbox_min + bbox_max) / 2
+        center[2] = bbox_min[2]
+        radius = (bbox_max[0] - bbox_min[0]) / 2
+        height = bbox_max[2] - bbox_min[2]
+
+        console.print(f"[info]Using material mesh [/]{material_mesh}")
+        console.print(f"  [info]Bounding box: [/]{bbox_min}[info] to [/]{bbox_max}")
+
+    layers = int(np.ceil(height / characteristic_length))
+    console.print(f"[info]Center: [/]{center}")
+    console.print(f"[info]Radius: [/]{radius}")
+    console.print(f"[info]Height: [/]{height}")
+    console.print(f"[info]Number of layers: [/]{layers}")
+    console.print(f"[info]Element order: [/]{element_order}")
+    console.print(f"[info]Characteristic length: [/]{characteristic_length}")
+    SURFACE = 2
+    VOLUME = 3
+    gmsh.initialize()
+
+    # create cylinder mesh
+    disk = gmsh.model.occ.addDisk(center[0], center[1], center[2], radius, radius)
+
+    # Extrude the disk along (0, 0, height) with the specified number of layers.
+    # The 'recombine=True' option tells gmsh to recombine triangular faces into quads.
+    # The extrude function returns a list of new entities:
+    #  - extruded[0]: the top surface,
+    #  - extruded[1]: the volume,
+    #  - extruded[2]: the lateral (side) surface.
+    extruded = gmsh.model.occ.extrude([(SURFACE, disk)], 0, 0, height,
+                                      numElements=[layers],
+                                      recombine=True)
+
+    # Extract tags from the extrusion result.
+    top_surface = extruded[0][1]  # Top surface created by extrusion.
+    volume = extruded[1][1]  # The volume.
+    lateral_surface = extruded[2][1]  # The lateral surface.
+
+    # Synchronize to update the model with the new entities.
+    gmsh.model.occ.synchronize()
+
+    # Force recombination of bottom surface
+    gmsh.model.mesh.setRecombine(SURFACE, disk)
+
+    # set mesh options
+    gmsh.option.setNumber("Mesh.MeshSizeMin", 0.5)
+    gmsh.option.setNumber("Mesh.MeshSizeMax", 1.0)
+    gmsh.option.setNumber("Mesh.MeshSizeFactor", characteristic_length)
+    gmsh.option.setNumber("Mesh.ElementOrder", element_order)
+    gmsh.option.setNumber("Mesh.HighOrderOptimize", 1 if element_order > 1 else 0)
+
+    # set physical groups
+    gmsh.model.addPhysicalGroup(SURFACE, [disk], 1)
+    gmsh.model.setPhysicalName(SURFACE, 1, "bottom")
+    gmsh.model.addPhysicalGroup(SURFACE, [top_surface], 2)
+    gmsh.model.setPhysicalName(SURFACE, 2, "top")
+    gmsh.model.addPhysicalGroup(SURFACE, [lateral_surface], 3)
+    gmsh.model.setPhysicalName(SURFACE, 3, "outside")
+    gmsh.model.addPhysicalGroup(VOLUME, [volume], 1)
+    gmsh.model.setPhysicalName(VOLUME, 1, "cylinder")
+
+    # generate mesh
+    gmsh.model.mesh.generate(3)
+
+    # save mesh
+    gmsh.write(str(mesh_file))
+    gmsh.finalize()
+
+    console.print(f"[info]Mesh saved to [/]{mesh_file}")
+
+    options = {
+        "dm_plex": {
+            "filename": f"{mesh_file.absolute()}",
+            "dim": 3,
+            "simplex": 0,
+        },
+        "bc": {
+            "slip": "1,2,3",
+            "slip_1_components": "0,1,2",
+            "slip_2": {
+                "components": "0,1,2",
+                "translate": f"0,0,{-0.05 * height}",
+            },
+            "slip_3_components": "0,1",
+        },
+        "remap": {
+            "direction": "z",
+            "scale": 0.95,
+        },
+    }
+    if material_mesh is not None:
+        options["mpm_material_mesh_dm_plex_filename"] = f"{material_mesh.absolute()}"
+    console.print(f"[info]Generated mesh options:[/]")
+    pprint(options, expand_all=True)
+
+    with open(mesh_file.with_suffix(".yml"), "w") as f:
+        yaml.dump(options, f, default_flow_style=False)
+
+    return ["-options_file", f"{mesh_file.with_suffix('.yml').absolute()}"]
 
 
 def get_cube_mesh(characteristic_length):
-    max_side_length = 1e-3 * characteristic_length
+    max_side_length = characteristic_length
     num_sides = int(np.ceil(4.4203 / max_side_length))
     options = [
         "-dm_plex_box_upper", "5.0684,5.0684,4.4203",
@@ -78,8 +219,24 @@ def get_cube_mesh(characteristic_length):
 
 @app.command()
 def run(characteristic_length: Annotated[float, typer.Argument(min=1)], topology: Topology, ratel_path: Annotated[Path, typer.Argument(envvar='RATEL_DIR')], out: Annotated[Path, typer.Option()] = None, n: Annotated[int, typer.Option(
-        min=1)] = 1, height_scale: float = 1, dry_run: bool = False, ceed: str = '/cpu/self', additional_args: str = "") -> None:
-    typer.secho(f"Running experiment with mesh characteristic length {characteristic_length}", fg=typer.colors.GREEN)
+        min=1)] = 1, height_scale: float = 1, dry_run: bool = False, ceed: str = '/cpu/self', additional_args: str = "", material_mesh: Path = None) -> None:
+    console.print(f"\n[h1]RATEL MPM CONFINED COMPRESSION[/]")
+    console.print(f"\n[h2]Mesh Options[/]")
+    console.print(f"  • Characteristic length: {characteristic_length}")
+    console.print(f"  • Topology: {str(topology)}")
+    if height_scale != 1 and material_mesh is None:
+        console.print(f"  • Height scale: {height_scale}")
+    if material_mesh is not None:
+        console.print(f"  • Material mesh: {material_mesh}")
+    console.print(f"\n[h2]Simulation Options[/]")
+    console.print(f"  • Ratel path: {ratel_path}")
+    console.print(f"  • Output directory: {out}")
+    console.print(f"  • Number of processes: {n}")
+    console.print(f"  • Ceed backend: {ceed}")
+    if additional_args:
+        console.print(f"  • Additional arguments: {additional_args}")
+    console.print("")
+
     if out is None:
         out = Path.cwd() / \
             f"MPM-{topology.value}-CL{int(characteristic_length):03}-{datetime.datetime.now().strftime(r'%Y-%m-%d_%H-%M-%S')}"
@@ -89,49 +246,51 @@ def run(characteristic_length: Annotated[float, typer.Argument(min=1)], topology
         out.rmdir()
     out.mkdir()
 
-    mesh_options = get_mesh(characteristic_length, topology, height_scale)
+    mesh_options = get_mesh(characteristic_length, topology, height_scale, material_mesh)
     local_solver_options = out / SOLVER_OPTIONS_FILE.name
     local_options = out / OPTIONS_FILE.name
     shutil.copy(SOLVER_OPTIONS_FILE, local_solver_options)
-    shutil.copy(OPTIONS_FILE, local_options)
+    shutil.copy(OPTIONS_FILE_MATERIAL_MESH if material_mesh else OPTIONS_FILE, local_options)
 
+    pre = "mpm_" if material_mesh else ""
     options = [
         "-options_file", f"{local_options}",
         "-options_file", f"{local_solver_options}",
         "-ceed", f"{ceed}",
-        "-binder_characteristic_length", f"{4*characteristic_length*1e-3}",
-        "-grains_characteristic_length", f"{4*characteristic_length*1e-3}",
+        f"-{pre}binder_characteristic_length", f"{4*characteristic_length}",
+        f"-{pre}grains_characteristic_length", f"{4*characteristic_length}",
         *mesh_options,
         "-ts_monitor_diagnostic_quantities", f"cgns:{out}/diagnostic_%06d.cgns",
         "-ts_monitor_surface_force_per_face", f"ascii:{out}/forces.csv",
         "-ts_monitor_strain_energy", f"ascii:{out}/strain_energy.csv",
         "-ts_monitor_swarm", f"ascii:{out.absolute()}/swarm.xmf",
-        "-bc_slip_2_translate", f"0,0,{-0.221015*height_scale}",
-        * additional_args.split()
+        *additional_args.split()
     ]
     out_file = out / "stdout.txt"
     err_file = out / "stderr.txt"
     ratel_exe = ratel_path / 'bin' / 'ratel-quasistatic'
     cmd_arr = ["mpirun", "-np", f"{n}", f"{ratel_exe}", *options] if n > 1 else [f"{ratel_exe}", *options]
-    typer.secho(f"Running:\n  > {' '.join(cmd_arr)}", fg=typer.colors.BRIGHT_BLACK)
+
+    console.print(f"\n[h1]Running experiment[/]\n")
+    console.print(f"[info]Running:\n  > [/]{' '.join(cmd_arr)}")
 
     if dry_run:
-        typer.secho("Dry run, exiting", fg=typer.colors.YELLOW)
+        console.print("[success]Dry run, exiting[/]")
         return
     try:
         with out_file.open("wb") as out_f, err_file.open("wb") as err_f:
             proc = subprocess.run(cmd_arr, stdout=out_f, stderr=err_f)
     except subprocess.CalledProcessError as e:
-        typer.secho(f"Error: process returned {e.returncode}", fg=typer.colors.RED)
-        typer.echo(e.stderr.decode())
+        console.print(f"[error]Error: process returned {e.returncode}[/]")
+        console.print(e.stderr.decode())
         raise typer.Exit(code=e.returncode)
 
     if proc.returncode != 0:
-        typer.secho(f"Error: process returned {proc.returncode}", fg=typer.colors.RED)
-        typer.echo(err_file.read_text())
+        console.print(f"[error]Error: process returned {proc.returncode}[/]")
+        console.print(err_file.read_text())
         raise typer.Exit(code=proc.returncode)
 
-    typer.secho(f"Experiment with mesh characteristic length {characteristic_length}", fg=typer.colors.GREEN)
+    console.print(f"[success]Experiment completed successfully.[/]")
 
 
 SCRIPT_PATH = Path(__file__).parent / 'flux_scripts'
@@ -142,36 +301,47 @@ GPUS_PER_NODE = 4
 
 @app.command()
 def flux_run(characteristic_length: Annotated[float, typer.Argument(min=1)], topology: Topology, ratel_path: Annotated[Path, typer.Argument(envvar='RATEL_DIR')], height_scale: float = 1, n: int = 1,
-             dry_run: bool = False, ceed: str = '/gpu/hip/gen', additional_args: str = ""):
-
-    typer.secho(
-        f"Using Flux to run experiment with mesh characteristic length {characteristic_length}",
-        fg=typer.colors.GREEN)
-
+             dry_run: bool = False, ceed: str = '/gpu/hip/gen', additional_args: str = "", material_mesh: Path = None):
     scratch_dir = f"/p/lustre5/{os.environ['USER']}/ratel"
     Path(scratch_dir).mkdir(parents=True, exist_ok=True)
 
-    mesh_options = get_mesh(characteristic_length, topology, height_scale)
+    console.print(f"\n[h1]RATEL MPM CONFINED COMPRESSION -- FLUX[/]")
+    console.print(f"\n[h2]Mesh Options[/]")
+    console.print(f"  • Characteristic length: {characteristic_length}")
+    console.print(f"  • Topology: {str(topology)}")
+    if height_scale != 1 and material_mesh is None:
+        console.print(f"  • Height scale: {height_scale}")
+    if material_mesh is not None:
+        console.print(f"  • Material mesh: {material_mesh}")
+    console.print(f"\n[h2]Simulation Options[/]")
+    console.print(f"  • Ratel path: {ratel_path}")
+    console.print(f"  • Scratch directory: {scratch_dir}")
+    console.print(f"  • Number of processes: {n}")
+    console.print(f"  • Ceed backend: {ceed}")
+    if additional_args:
+        console.print(f"  • Additional arguments: {additional_args}")
+    console.print("")
+
+    mesh_options = get_mesh(characteristic_length, topology, height_scale, material_mesh)
+    pre = "mpm_" if material_mesh else ""
     options = [
         "-options_file", f"$SCRATCH/Material_Options.yml",
         "-options_file", f"$SCRATCH/Ratel_Solver_Options.yml",
         "-ceed", f"{ceed}",
-        "-binder_characteristic_length", f"{4*characteristic_length*1e-3}",
-        "-grains_characteristic_length", f"{4*characteristic_length*1e-3}",
+        f"-{pre}binder_characteristic_length", f"{4*characteristic_length}",
+        f"-{pre}grains_characteristic_length", f"{4*characteristic_length}",
         *mesh_options,
         "-ts_monitor_diagnostic_quantities", f"cgns:$SCRATCH/diagnostic_%06d.cgns",
         "-ts_monitor_surface_force_per_face", f"ascii:$SCRATCH/forces.csv",
         "-ts_monitor_strain_energy", f"ascii:$SCRATCH/strain_energy.csv",
         "-ts_monitor_swarm", f"ascii:$SCRATCH/swarm.xmf",
-        "-bc_slip_2_translate", f"0,0,{-0.221015*height_scale}",
         *additional_args.split()
     ]
 
     command = f"{ratel_path / 'bin' / 'ratel-quasistatic'} {' '.join(options)}"
     num_nodes = int(np.ceil(n / GPUS_PER_NODE))
 
-    if not SCRIPT_PATH.exists():
-        SCRIPT_PATH.mkdir()
+    SCRIPT_PATH.mkdir(exist_ok=True)
 
     script_file = None
     with tempfile.NamedTemporaryFile(mode='w', dir=SCRIPT_PATH, delete=False) as f:
@@ -230,7 +400,7 @@ def flux_run(characteristic_length: Annotated[float, typer.Argument(min=1)], top
             'echo "-->Moving into scratch directory"',
             'echo ""',
             'cd $SCRATCH',
-            'cp $INPUT_DIRECTORY/Material_Options.yml $SCRATCH',
+            f'cp $INPUT_DIRECTORY/{"Material_Options.yml" if material_mesh is None else "Material_Options_MaterialMesh.yml"} $SCRATCH',
             'cp $INPUT_DIRECTORY/Ratel_Solver_Options.yml $SCRATCH',
             'mkdir $SCRATCH/meshes',
             f'cp $INPUT_DIRECTORY/{mesh_options[1]} $SCRATCH/{mesh_options[1]}' if topology == Topology.CYLINDER else '',
@@ -251,13 +421,13 @@ def flux_run(characteristic_length: Annotated[float, typer.Argument(min=1)], top
             'echo "~~~~~~~~~~~~~~~~~~~"',
         ]))
 
-    typer.secho(f"Submitting job with command: {command}")
+    console.print(f"Submitting job with command: {command}")
     command = ["flux", "batch", "-N", f"{num_nodes}", "-n", f"{n}", '-x', "-g", "1", f"{script_file}"]
     proc = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if proc.returncode != 0:
-        typer.secho(f"Return code {proc.returncode}: {proc.stderr.decode()}", fg=typer.colors.RED)
+        console.print(f"[error]Return code {proc.returncode}: {proc.stderr.decode()}[/]", fg=typer.colors.RED)
     else:
-        typer.secho(f"Job submitted with ID {proc.stdout.decode()}", fg=typer.colors.GREEN)
+        console.print(f"[success]Job submitted with ID {proc.stdout.decode()}[/]")
     script_file.unlink()
 
 

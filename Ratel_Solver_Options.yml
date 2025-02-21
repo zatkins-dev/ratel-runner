@@ -1,6 +1,9 @@
 # misc
 diagnostic_order: 1
 
+# DM
+dm_plex_hash_location:
+
 # TS
 ts:
   dt: 0.1
