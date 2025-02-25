@@ -44,7 +44,13 @@ RATEL_DIR = Path(env['HOME']) / "project" / "micromorph" / "ratel"
 RATEL_EXE = RATEL_DIR / "bin" / "ratel-quasistatic"
 OPTIONS_FILE = Path(__file__).parent / "Material_Options.yml"
 OPTIONS_FILE_MATERIAL_MESH = Path(__file__).parent / "Material_Options_MaterialMesh.yml"
+OPTIONS_FILE_VOXEL = Path(__file__).parent / "Material_Options_Voxel.yml"
 SOLVER_OPTIONS_FILE = Path(__file__).parent / "Ratel_Solver_Options.yml"
+
+DIE_PIXEL_SIZE = 8.434786  # um/pixel
+DIE_RADIUS = 2550.608716  # um, 5_000 / (8.434786 * 2) + 6 pixels
+DIE_HEIGHT = 8519.13386  # um, 1010 pixels
+DIE_CENTER = [2656.95759, 2656.95759, 0]  # um, 315, 315, 0 pixels
 
 
 def get_bounding_box(mesh_file: Path):
@@ -57,6 +63,7 @@ def get_bounding_box(mesh_file: Path):
 
 class Topology(enum.Enum):
     CYLINDER = "cylinder"
+    DIE = "die"
     CUBE = "cube"
 
     def __repr__(self):
@@ -66,29 +73,42 @@ class Topology(enum.Enum):
         return self.value
 
 
-def get_mesh(characteristic_length, topology=Topology.CYLINDER,
-             height_scale: float = 1, material_mesh: Path = None):
+def get_mesh(characteristic_length, topology=Topology.CYLINDER, material_mesh: Path = None, voxel_data: Path = None):
     console.print("[h1]Mesh Generation[/]\n")
     if topology == Topology.CYLINDER:
-        return get_cylinder_mesh(characteristic_length, height_scale, material_mesh)
+        return get_cylinder_mesh(characteristic_length, material_mesh=material_mesh)
+    elif topology == Topology.DIE:
+        args = get_cylinder_mesh(
+            characteristic_length,
+            radius=DIE_RADIUS,
+            height=DIE_HEIGHT,
+            center=DIE_CENTER,
+            voxel_data=voxel_data)
+        args.extend([
+            '-mpm_use_voxel',
+            '-mpm_voxel_filename', f'{voxel_data.absolute()}',
+            '-mpm_voxel_pixel_size', f'{DIE_PIXEL_SIZE}',
+            '-mpm_void_characteristic_length', f'{characteristic_length*4}',
+        ])
+        return args
     elif topology == Topology.CUBE:
-        return get_cube_mesh(characteristic_length, height_scale)
+        return get_cube_mesh(characteristic_length)
     else:
         raise ValueError(f"Unknown topology {topology}")
 
 
-def get_cylinder_mesh(characteristic_length, height_scale: float = 1, material_mesh: Path = None):
+def get_cylinder_mesh(characteristic_length, radius=2534.72400368, height=4420.35076904,
+                      center=[0, 0, 0], material_mesh: Path = None, voxel_data: Path = None):
     if material_mesh is not None:
         if not material_mesh.exists():
             raise FileNotFoundError(f"Material mesh {material_mesh} does not exist")
-        if height_scale != 1:
-            log.warning("Warning: height_scale is ignored when using a material mesh")
-            height_scale = 1
         mesh_file = Path(__file__).parent / "meshes" / \
             f"cylinder_{material_mesh.stem}_CL{int(characteristic_length):03}.msh"
-    elif height_scale != 1:
+    elif voxel_data is not None:
+        if not voxel_data.exists():
+            raise FileNotFoundError(f"Voxel data {voxel_data} does not exist")
         mesh_file = Path(__file__).parent / "meshes" / \
-            f"cylinder_height{height_scale}_CL{int(characteristic_length):03}.msh"
+            f"cylinder_{voxel_data.stem}_CL{int(characteristic_length):03}.msh"
     else:
         mesh_file = Path(__file__).parent / "meshes" / f"cylinder_CL{int(characteristic_length):03}.msh"
     if mesh_file.exists() and mesh_file.with_suffix(".yml").exists():
@@ -97,9 +117,6 @@ def get_cylinder_mesh(characteristic_length, height_scale: float = 1, material_m
     (Path(__file__).parent / "meshes").mkdir(exist_ok=True)
 
     element_order = 1
-    center = np.array([0, 0, 0])
-    radius = 2534.72400368
-    height = 4420.35076904 * height_scale
     if material_mesh is not None:
         bbox_min, bbox_max = get_bounding_box(material_mesh)
         center = (bbox_min + bbox_max) / 2
@@ -219,15 +236,17 @@ def get_cube_mesh(characteristic_length):
 
 @app.command()
 def run(characteristic_length: Annotated[float, typer.Argument(min=1)], topology: Topology, ratel_path: Annotated[Path, typer.Argument(envvar='RATEL_DIR')], out: Annotated[Path, typer.Option()] = None, n: Annotated[int, typer.Option(
-        min=1)] = 1, height_scale: float = 1, dry_run: bool = False, ceed: str = '/cpu/self', additional_args: str = "", material_mesh: Path = None) -> None:
+        min=1)] = 1, dry_run: bool = False, ceed: str = '/cpu/self', additional_args: str = "", material_mesh: Path = None, voxel_data: Path = None) -> None:
+    if topology == Topology.DIE and voxel_data is None:
+        raise typer.Abort("Voxel data is required for die topology")
     console.print(f"\n[h1]RATEL MPM CONFINED COMPRESSION[/]")
     console.print(f"\n[h2]Mesh Options[/]")
     console.print(f"  • Characteristic length: {characteristic_length}")
     console.print(f"  • Topology: {str(topology)}")
-    if height_scale != 1 and material_mesh is None:
-        console.print(f"  • Height scale: {height_scale}")
     if material_mesh is not None:
         console.print(f"  • Material mesh: {material_mesh}")
+    if voxel_data is not None:
+        console.print(f"  • Voxel data: {voxel_data}")
     console.print(f"\n[h2]Simulation Options[/]")
     console.print(f"  • Ratel path: {ratel_path}")
     console.print(f"  • Output directory: {out}")
@@ -246,13 +265,18 @@ def run(characteristic_length: Annotated[float, typer.Argument(min=1)], topology
         out.rmdir()
     out.mkdir()
 
-    mesh_options = get_mesh(characteristic_length, topology, height_scale, material_mesh)
+    mesh_options = get_mesh(characteristic_length, topology, material_mesh=material_mesh, voxel_data=voxel_data)
     local_solver_options = out / SOLVER_OPTIONS_FILE.name
     local_options = out / OPTIONS_FILE.name
     shutil.copy(SOLVER_OPTIONS_FILE, local_solver_options)
-    shutil.copy(OPTIONS_FILE_MATERIAL_MESH if material_mesh else OPTIONS_FILE, local_options)
+    if topology == Topology.DIE:
+        shutil.copy(OPTIONS_FILE_VOXEL, local_options)
+    elif material_mesh is not None:
+        shutil.copy(OPTIONS_FILE_MATERIAL_MESH, local_options)
+    else:
+        shutil.copy(OPTIONS_FILE, local_options)
 
-    pre = "mpm_" if material_mesh else ""
+    pre = "mpm_" if (material_mesh or voxel_data) else ""
     options = [
         "-options_file", f"{local_options}",
         "-options_file", f"{local_solver_options}",
@@ -300,19 +324,20 @@ GPUS_PER_NODE = 4
 
 
 @app.command()
-def flux_run(characteristic_length: Annotated[float, typer.Argument(min=1)], topology: Topology, ratel_path: Annotated[Path, typer.Argument(envvar='RATEL_DIR')], height_scale: float = 1, n: int = 1,
-             dry_run: bool = False, ceed: str = '/gpu/hip/gen', additional_args: str = "", material_mesh: Path = None):
+def flux_run(characteristic_length: Annotated[float, typer.Argument(min=1)], topology: Topology, ratel_path: Annotated[Path, typer.Argument(envvar='RATEL_DIR')], n: int = 1,
+             dry_run: bool = False, ceed: str = '/gpu/hip/gen', additional_args: str = "", material_mesh: Path = None, voxel_data: Path = None) -> None:
     scratch_dir = f"/p/lustre5/{os.environ['USER']}/ratel"
     Path(scratch_dir).mkdir(parents=True, exist_ok=True)
-
+    if topology == Topology.DIE and voxel_data is None:
+        raise typer.Abort("Voxel data is required for die topology")
     console.print(f"\n[h1]RATEL MPM CONFINED COMPRESSION -- FLUX[/]")
     console.print(f"\n[h2]Mesh Options[/]")
     console.print(f"  • Characteristic length: {characteristic_length}")
     console.print(f"  • Topology: {str(topology)}")
-    if height_scale != 1 and material_mesh is None:
-        console.print(f"  • Height scale: {height_scale}")
     if material_mesh is not None:
         console.print(f"  • Material mesh: {material_mesh}")
+    if voxel_data is not None:
+        console.print(f"  • Voxel data: {voxel_data}")
     console.print(f"\n[h2]Simulation Options[/]")
     console.print(f"  • Ratel path: {ratel_path}")
     console.print(f"  • Scratch directory: {scratch_dir}")
@@ -322,8 +347,8 @@ def flux_run(characteristic_length: Annotated[float, typer.Argument(min=1)], top
         console.print(f"  • Additional arguments: {additional_args}")
     console.print("")
 
-    mesh_options = get_mesh(characteristic_length, topology, height_scale, material_mesh)
-    pre = "mpm_" if material_mesh else ""
+    mesh_options = get_mesh(characteristic_length, topology, material_mesh=material_mesh, voxel_data=None)
+    pre = "mpm_" if (material_mesh or voxel_data) else ""
     options = [
         "-options_file", f"$SCRATCH/Material_Options.yml",
         "-options_file", f"$SCRATCH/Ratel_Solver_Options.yml",
@@ -342,6 +367,13 @@ def flux_run(characteristic_length: Annotated[float, typer.Argument(min=1)], top
     num_nodes = int(np.ceil(n / GPUS_PER_NODE))
 
     SCRIPT_PATH.mkdir(exist_ok=True)
+
+    if topology == Topology.DIE:
+        options_file = OPTIONS_FILE_VOXEL
+    elif material_mesh is not None:
+        options_file = OPTIONS_FILE_MATERIAL_MESH
+    else:
+        options_file = OPTIONS_FILE
 
     script_file = None
     with tempfile.NamedTemporaryFile(mode='w', dir=SCRIPT_PATH, delete=False) as f:
@@ -400,10 +432,10 @@ def flux_run(characteristic_length: Annotated[float, typer.Argument(min=1)], top
             'echo "-->Moving into scratch directory"',
             'echo ""',
             'cd $SCRATCH',
-            f'cp $INPUT_DIRECTORY/{"Material_Options.yml" if material_mesh is None else "Material_Options_MaterialMesh.yml"} $SCRATCH',
+            f'cp $INPUT_DIRECTORY/{options_file.name} $SCRATCH',
             'cp $INPUT_DIRECTORY/Ratel_Solver_Options.yml $SCRATCH',
             'mkdir $SCRATCH/meshes',
-            f'cp $INPUT_DIRECTORY/{mesh_options[1]} $SCRATCH/{mesh_options[1]}' if topology == Topology.CYLINDER else '',
+            f'cp $INPUT_DIRECTORY/{mesh_options[1]} $SCRATCH/{mesh_options[1]}' if topology != Topology.CUBE else '',
             f'',
             'echo ""',
             'echo "-->Starting simulation at $(date)"',

@@ -1,0 +1,61 @@
+orders: 1
+diagnostic_order: 1
+
+method: mpm
+mpm:
+  point_location_type: uniform
+  num_points_per_cell: 27
+  use_voxel:
+  material: void,grains,binder
+  void:
+    model: elasticity-mpm-neo-hookean-damage-current
+    E: 1
+    nu: 0.0
+    fracture_toughness: 1830
+    damage_scaling: 1e-10
+    # damage_viscosity: 0.1
+    rho: 1.0
+    use_AT1: false
+    residual_stiffness: 0.01
+    label:
+      value: 0
+  grains:
+    model: elasticity-mpm-neo-hookean-damage-current
+    E: 22000
+    nu: 0.25
+    fracture_toughness: 1830
+    damage_scaling: 1e6
+    # damage_viscosity: 0.1
+    rho: 2001.0
+    use_AT1: false
+    residual_stiffness: 0.01
+    label:
+      value: 1
+
+  binder:
+    model: elasticity-mpm-neo-hookean-damage-current
+    E: 274.87
+    nu: 0.25
+    fracture_toughness: 0.74
+    damage_scaling: 1e6
+    rho: 1190.0
+    # damage_viscosity: 0.23
+    use_AT1: false
+    residual_stiffness: 0.01
+    label:
+      value: 2
+
+
+dm_plex:
+  dim: 3
+  simplex: 0
+
+material: dummy
+dummy:
+  model: elasticity-mpm-neo-hookean-damage-current
+  skip_checks:
+  use_AT1: false
+
+surface_force_faces: 1,2
+
+viewer_cgns_batch_size: 1
