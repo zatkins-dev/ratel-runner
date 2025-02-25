@@ -347,7 +347,7 @@ def flux_run(characteristic_length: Annotated[float, typer.Argument(min=1)], top
         console.print(f"  • Additional arguments: {additional_args}")
     console.print("")
 
-    mesh_options = get_mesh(characteristic_length, topology, material_mesh=material_mesh, voxel_data=None)
+    mesh_options = get_mesh(characteristic_length, topology, material_mesh=material_mesh, voxel_data=voxel_data)
     pre = "mpm_" if (material_mesh or voxel_data) else ""
     options = [
         "-options_file", f"$SCRATCH/Material_Options.yml",
@@ -432,7 +432,7 @@ def flux_run(characteristic_length: Annotated[float, typer.Argument(min=1)], top
             'echo "-->Moving into scratch directory"',
             'echo ""',
             'cd $SCRATCH',
-            f'cp $INPUT_DIRECTORY/{options_file.name} $SCRATCH',
+            f'cp $INPUT_DIRECTORY/{options_file.name} $SCRATCH/Material_Options.yml',
             'cp $INPUT_DIRECTORY/Ratel_Solver_Options.yml $SCRATCH',
             'mkdir $SCRATCH/meshes',
             f'cp $INPUT_DIRECTORY/{mesh_options[1]} $SCRATCH/{mesh_options[1]}' if topology != Topology.CUBE else '',
@@ -460,7 +460,7 @@ def flux_run(characteristic_length: Annotated[float, typer.Argument(min=1)], top
         return
     proc = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if proc.returncode != 0:
-        console.print(f"[error]Return code {proc.returncode}: {proc.stderr.decode()}[/]", fg=typer.colors.RED)
+        console.print(f"[error]Return code {proc.returncode}: {proc.stderr.decode()}[/]")
     else:
         console.print(f"[success]Job submitted with ID {proc.stdout.decode()}[/]")
     script_file.unlink()
