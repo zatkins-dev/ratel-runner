@@ -403,8 +403,8 @@ def flux_run(characteristic_length: Annotated[float, typer.Argument(min=1)], top
             'echo ""',
             '',
             'module reset',
-            'ml +rocmcc/6.1.2-cce-18.0.0-magic',
-            'ml +rocm/6.1.2',
+            'ml +rocmcc/6.3.0-cce-18.0.1d-magic',
+            'ml +rocm/6.3.0',
             'ml +craype-accel-amd-gfx942',
             'ml +cray-python',
             'ml +cray-libsci_acc',
@@ -453,8 +453,11 @@ def flux_run(characteristic_length: Annotated[float, typer.Argument(min=1)], top
             'echo "~~~~~~~~~~~~~~~~~~~"',
         ]))
 
-    console.print(f"Submitting job with command: {command}")
     command = ["flux", "batch", "-N", f"{num_nodes}", "-n", f"{n}", '-x', "-g", "1", f"{script_file}"]
+    console.print(f"Submitting job with command: {' '.join(command)}")
+    if dry_run:
+        console.print("[success]Dry run, exiting[/]")
+        return
     proc = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if proc.returncode != 0:
         console.print(f"[error]Return code {proc.returncode}: {proc.stderr.decode()}[/]", fg=typer.colors.RED)
