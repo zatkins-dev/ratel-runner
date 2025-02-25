@@ -73,7 +73,7 @@ class Topology(enum.Enum):
         return self.value
 
 
-def get_mesh(characteristic_length, topology=Topology.CYLINDER, material_mesh: Path = None, voxel_data: Path = None):
+def get_mesh(characteristic_length, topology=Topology.CYLINDER, load_fraction=0.05, material_mesh: Path = None, voxel_data: Path = None):
     console.print("[h1]Mesh Generation[/]\n")
     if topology == Topology.CYLINDER:
         return get_cylinder_mesh(characteristic_length, material_mesh=material_mesh)
@@ -90,6 +90,11 @@ def get_mesh(characteristic_length, topology=Topology.CYLINDER, material_mesh: P
             '-mpm_voxel_pixel_size', f'{DIE_PIXEL_SIZE}',
             '-mpm_void_characteristic_length', f'{characteristic_length*4}',
         ])
+        if load_fraction != 0.5:
+            args.extend([
+                '-remap_scale', f'{1-load_fraction}',
+                '-bc_slip_2_translate', f'0,0,{-load_fraction*DIE_HEIGHT}'
+            ])
         return args
     elif topology == Topology.CUBE:
         return get_cube_mesh(characteristic_length)
@@ -98,7 +103,7 @@ def get_mesh(characteristic_length, topology=Topology.CYLINDER, material_mesh: P
 
 
 def get_cylinder_mesh(characteristic_length, radius=2534.72400368, height=4420.35076904,
-                      center=[0, 0, 0], material_mesh: Path = None, voxel_data: Path = None):
+                      center=[0, 0, 0], load_fraction=0.05, material_mesh: Path = None, voxel_data: Path = None):
     if material_mesh is not None:
         if not material_mesh.exists():
             raise FileNotFoundError(f"Material mesh {material_mesh} does not exist")
@@ -236,7 +241,7 @@ def get_cube_mesh(characteristic_length):
 
 @app.command()
 def run(characteristic_length: Annotated[float, typer.Argument(min=1)], topology: Topology, ratel_path: Annotated[Path, typer.Argument(envvar='RATEL_DIR')], out: Annotated[Path, typer.Option()] = None, n: Annotated[int, typer.Option(
-        min=1)] = 1, dry_run: bool = False, ceed: str = '/cpu/self', additional_args: str = "", material_mesh: Path = None, voxel_data: Path = None) -> None:
+        min=1)] = 1, dry_run: bool = False, ceed: str = '/cpu/self', additional_args: str = "", material_mesh: Path = None, voxel_data: Path = None, load_fraction: Annotated[float, typer.Option(min=0, max=1)] = 0.05) -> None:
     if topology == Topology.DIE and voxel_data is None:
         raise typer.Abort("Voxel data is required for die topology")
     console.print(f"\n[h1]RATEL MPM CONFINED COMPRESSION[/]")
@@ -265,7 +270,7 @@ def run(characteristic_length: Annotated[float, typer.Argument(min=1)], topology
         out.rmdir()
     out.mkdir()
 
-    mesh_options = get_mesh(characteristic_length, topology, material_mesh=material_mesh, voxel_data=voxel_data)
+    mesh_options = get_mesh(characteristic_length, topology, material_mesh=material_mesh, voxel_data=voxel_data, load_fraction=load_fraction)
     local_solver_options = out / SOLVER_OPTIONS_FILE.name
     local_options = out / OPTIONS_FILE.name
     shutil.copy(SOLVER_OPTIONS_FILE, local_solver_options)
@@ -325,7 +330,7 @@ GPUS_PER_NODE = 4
 
 @app.command()
 def flux_run(characteristic_length: Annotated[float, typer.Argument(min=1)], topology: Topology, ratel_path: Annotated[Path, typer.Argument(envvar='RATEL_DIR')], n: int = 1,
-             dry_run: bool = False, ceed: str = '/gpu/hip/gen', additional_args: str = "", material_mesh: Path = None, voxel_data: Path = None) -> None:
+             dry_run: bool = False, ceed: str = '/gpu/hip/gen', additional_args: str = "", material_mesh: Path = None, voxel_data: Path = None, load_fraction: Annotated[float, typer.Option(min=0, max=1)] = 0.05) -> None:
     scratch_dir = f"/p/lustre5/{os.environ['USER']}/ratel"
     Path(scratch_dir).mkdir(parents=True, exist_ok=True)
     if topology == Topology.DIE and voxel_data is None:
@@ -347,7 +352,7 @@ def flux_run(characteristic_length: Annotated[float, typer.Argument(min=1)], top
         console.print(f"  • Additional arguments: {additional_args}")
     console.print("")
 
-    mesh_options = get_mesh(characteristic_length, topology, material_mesh=material_mesh, voxel_data=voxel_data)
+    mesh_options = get_mesh(characteristic_length, topology, material_mesh=material_mesh, voxel_data=voxel_data, load_fraction=load_fraction)
     pre = "mpm_" if (material_mesh or voxel_data) else ""
     options = [
         "-options_file", f"$SCRATCH/Material_Options.yml",

@@ -36,8 +36,8 @@ snes:
   ksp:
     ew:
     ew_version: 3
-    ew_rtol0: 1e-4
-    ew_rtolmax: 1e-3
+    ew_rtol0: 1e-6
+    ew_rtolmax: 1e-5
 
 
 # snes:
@@ -58,7 +58,7 @@ ksp:
   type: gmres
   norm_type: preconditioned
   # gmres_restart: 500
-  max_it: 2000
+  max_it: 5000
   # max_it: 1000
   rtol: 1e-6
   # gmres_modifiedgramschmidt:

@@ -1,10 +1,10 @@
-orders: 2
+orders: 1
 diagnostic_order: 1
 
 method: mpm
 mpm:
   point_location_type: uniform
-  num_points_per_cell: 64
+  num_points_per_cell: 27
   use_voxel:
   material: void,grains,binder
   void:
