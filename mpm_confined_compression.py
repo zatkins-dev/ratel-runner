@@ -45,12 +45,13 @@ RATEL_EXE = RATEL_DIR / "bin" / "ratel-quasistatic"
 OPTIONS_FILE = Path(__file__).parent / "Material_Options.yml"
 OPTIONS_FILE_MATERIAL_MESH = Path(__file__).parent / "Material_Options_MaterialMesh.yml"
 OPTIONS_FILE_VOXEL = Path(__file__).parent / "Material_Options_Voxel.yml"
+OPTIONS_FILE_VOXEL_AIR = Path(__file__).parent / "Material_Options_Voxel_Air.yml"
 SOLVER_OPTIONS_FILE = Path(__file__).parent / "Ratel_Solver_Options.yml"
 
-DIE_PIXEL_SIZE = 8.434786  # um/pixel
-DIE_RADIUS = 2550.608716  # um, 5_000 / (8.434786 * 2) + 6 pixels
-DIE_HEIGHT = 8519.13386  # um, 1010 pixels
-DIE_CENTER = [2656.95759, 2656.95759, 0]  # um, 315, 315, 0 pixels
+DIE_PIXEL_SIZE = 8.434786e-3  # mm/pixel # 8.434786 um/pixel
+DIE_RADIUS = 2.550608716  # mm # 2550.608716 um, 5_000 / (8.434786 * 2) + 6 pixels
+DIE_HEIGHT = 8.51913386  # mm # 8519.13386 um, 1010 pixels
+DIE_CENTER = [2.65695759, 2.65695759, 0]  # [2656.95759, 2656.95759, 0] um, 315, 315, 0 pixels
 
 
 def get_bounding_box(mesh_file: Path):
@@ -73,7 +74,8 @@ class Topology(enum.Enum):
         return self.value
 
 
-def get_mesh(characteristic_length, topology=Topology.CYLINDER, load_fraction=0.05, material_mesh: Path = None, voxel_data: Path = None):
+def get_mesh(characteristic_length, topology=Topology.CYLINDER, load_fraction=0.05,
+             material_mesh: Path = None, voxel_data: Path = None):
     console.print("[h1]Mesh Generation[/]\n")
     if topology == Topology.CYLINDER:
         return get_cylinder_mesh(characteristic_length, material_mesh=material_mesh)
@@ -108,14 +110,14 @@ def get_cylinder_mesh(characteristic_length, radius=2534.72400368, height=4420.3
         if not material_mesh.exists():
             raise FileNotFoundError(f"Material mesh {material_mesh} does not exist")
         mesh_file = Path(__file__).parent / "meshes" / \
-            f"cylinder_{material_mesh.stem}_CL{int(characteristic_length):03}.msh"
+            f"cylinder_{material_mesh.stem}_CL{characteristic_length}.msh"
     elif voxel_data is not None:
         if not voxel_data.exists():
             raise FileNotFoundError(f"Voxel data {voxel_data} does not exist")
         mesh_file = Path(__file__).parent / "meshes" / \
-            f"cylinder_{voxel_data.stem}_CL{int(characteristic_length):03}.msh"
+            f"cylinder_{voxel_data.stem}_CL{characteristic_length}.msh"
     else:
-        mesh_file = Path(__file__).parent / "meshes" / f"cylinder_CL{int(characteristic_length):03}.msh"
+        mesh_file = Path(__file__).parent / "meshes" / f"cylinder_CL{characteristic_length}.msh"
     if mesh_file.exists() and mesh_file.with_suffix(".yml").exists():
         console.print(f"[info]Using existing mesh [/]{mesh_file}")
         return ["-options_file", f"{mesh_file.with_suffix('.yml')}"]
@@ -240,8 +242,8 @@ def get_cube_mesh(characteristic_length):
 
 
 @app.command()
-def run(characteristic_length: Annotated[float, typer.Argument(min=1)], topology: Topology, ratel_path: Annotated[Path, typer.Argument(envvar='RATEL_DIR')], out: Annotated[Path, typer.Option()] = None, n: Annotated[int, typer.Option(
-        min=1)] = 1, dry_run: bool = False, ceed: str = '/cpu/self', additional_args: str = "", material_mesh: Path = None, voxel_data: Path = None, load_fraction: Annotated[float, typer.Option(min=0, max=1)] = 0.05) -> None:
+def run(characteristic_length: Annotated[float, typer.Argument(min=0)], topology: Topology, ratel_path: Annotated[Path, typer.Argument(envvar='RATEL_DIR')], out: Annotated[Path, typer.Option()] = None, n: Annotated[int, typer.Option(
+        min=1)] = 1, dry_run: bool = False, ceed: str = '/cpu/self', additional_args: str = "", material_mesh: Path = None, voxel_data: Path = None, load_fraction: Annotated[float, typer.Option(min=0, max=1)] = 0.05, use_air: bool = False) -> None:
     if topology == Topology.DIE and voxel_data is None:
         raise typer.Abort("Voxel data is required for die topology")
     console.print(f"\n[h1]RATEL MPM CONFINED COMPRESSION[/]")
@@ -270,12 +272,21 @@ def run(characteristic_length: Annotated[float, typer.Argument(min=1)], topology
         out.rmdir()
     out.mkdir()
 
-    mesh_options = get_mesh(characteristic_length, topology, material_mesh=material_mesh, voxel_data=voxel_data, load_fraction=load_fraction)
+    mesh_options = get_mesh(
+        characteristic_length,
+        topology,
+        material_mesh=material_mesh,
+        voxel_data=voxel_data,
+        load_fraction=load_fraction)
     local_solver_options = out / SOLVER_OPTIONS_FILE.name
     local_options = out / OPTIONS_FILE.name
     shutil.copy(SOLVER_OPTIONS_FILE, local_solver_options)
     if topology == Topology.DIE:
-        shutil.copy(OPTIONS_FILE_VOXEL, local_options)
+        if use_air:
+            shutil.copy(OPTIONS_FILE_VOXEL_AIR, local_options)
+            additional_args += f" -mpm_void_characteristic_length {4*characteristic_length}"
+        else:
+            shutil.copy(OPTIONS_FILE_VOXEL, local_options)
     elif material_mesh is not None:
         shutil.copy(OPTIONS_FILE_MATERIAL_MESH, local_options)
     else:
@@ -283,13 +294,14 @@ def run(characteristic_length: Annotated[float, typer.Argument(min=1)], topology
 
     pre = "mpm_" if (material_mesh or voxel_data) else ""
     options = [
-        "-options_file", f"{local_options}",
         "-options_file", f"{local_solver_options}",
+        "-options_file", f"{local_options}",
         "-ceed", f"{ceed}",
         f"-{pre}binder_characteristic_length", f"{4*characteristic_length}",
         f"-{pre}grains_characteristic_length", f"{4*characteristic_length}",
         *mesh_options,
         "-ts_monitor_diagnostic_quantities", f"cgns:{out}/diagnostic_%06d.cgns",
+        "-ts_monitor_solution", f"cgns:{out}/solution_%06d.cgns",
         "-ts_monitor_surface_force_per_face", f"ascii:{out}/forces.csv",
         "-ts_monitor_strain_energy", f"ascii:{out}/strain_energy.csv",
         "-ts_monitor_swarm", f"ascii:{out.absolute()}/swarm.xmf",
@@ -330,7 +342,7 @@ GPUS_PER_NODE = 4
 
 @app.command()
 def flux_run(characteristic_length: Annotated[float, typer.Argument(min=1)], topology: Topology, ratel_path: Annotated[Path, typer.Argument(envvar='RATEL_DIR')], n: int = 1,
-             dry_run: bool = False, ceed: str = '/gpu/hip/gen', additional_args: str = "", material_mesh: Path = None, voxel_data: Path = None, load_fraction: Annotated[float, typer.Option(min=0, max=1)] = 0.05) -> None:
+             dry_run: bool = False, ceed: str = '/gpu/hip/gen', additional_args: str = "", material_mesh: Path = None, voxel_data: Path = None, load_fraction: Annotated[float, typer.Option(min=0, max=1)] = 0.05, use_air: bool = False) -> None:
     scratch_dir = f"/p/lustre5/{os.environ['USER']}/ratel"
     Path(scratch_dir).mkdir(parents=True, exist_ok=True)
     if topology == Topology.DIE and voxel_data is None:
@@ -352,11 +364,33 @@ def flux_run(characteristic_length: Annotated[float, typer.Argument(min=1)], top
         console.print(f"  • Additional arguments: {additional_args}")
     console.print("")
 
-    mesh_options = get_mesh(characteristic_length, topology, material_mesh=material_mesh, voxel_data=voxel_data, load_fraction=load_fraction)
+    mesh_options = get_mesh(
+        characteristic_length,
+        topology,
+        material_mesh=material_mesh,
+        voxel_data=voxel_data,
+        load_fraction=load_fraction)
     pre = "mpm_" if (material_mesh or voxel_data) else ""
+
+    command = f"{ratel_path / 'bin' / 'ratel-quasistatic'} {' '.join(options)}"
+    num_nodes = int(np.ceil(n / GPUS_PER_NODE))
+
+    SCRIPT_PATH.mkdir(exist_ok=True)
+
+    if topology == Topology.DIE:
+        if use_air:
+            options_file = OPTIONS_FILE_VOXEL_AIR
+            additional_args += f" -mpm_void_characteristic_length {4*characteristic_length}"
+        else:
+            options_file = OPTIONS_FILE_VOXEL
+    elif material_mesh is not None:
+        options_file = OPTIONS_FILE_MATERIAL_MESH
+    else:
+        options_file = OPTIONS_FILE
+
     options = [
-        "-options_file", f"$SCRATCH/Material_Options.yml",
         "-options_file", f"$SCRATCH/Ratel_Solver_Options.yml",
+        "-options_file", f"$SCRATCH/Material_Options.yml",
         "-ceed", f"{ceed}",
         f"-{pre}binder_characteristic_length", f"{4*characteristic_length}",
         f"-{pre}grains_characteristic_length", f"{4*characteristic_length}",
@@ -367,18 +401,6 @@ def flux_run(characteristic_length: Annotated[float, typer.Argument(min=1)], top
         "-ts_monitor_swarm", f"ascii:$SCRATCH/swarm.xmf",
         *additional_args.split()
     ]
-
-    command = f"{ratel_path / 'bin' / 'ratel-quasistatic'} {' '.join(options)}"
-    num_nodes = int(np.ceil(n / GPUS_PER_NODE))
-
-    SCRIPT_PATH.mkdir(exist_ok=True)
-
-    if topology == Topology.DIE:
-        options_file = OPTIONS_FILE_VOXEL
-    elif material_mesh is not None:
-        options_file = OPTIONS_FILE_MATERIAL_MESH
-    else:
-        options_file = OPTIONS_FILE
 
     script_file = None
     with tempfile.NamedTemporaryFile(mode='w', dir=SCRIPT_PATH, delete=False) as f:

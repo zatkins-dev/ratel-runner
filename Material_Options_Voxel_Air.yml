@@ -6,44 +6,47 @@ mpm:
   point_location_type: uniform
   num_points_per_cell: 27
   use_voxel:
-  material: grains,binder #,void
-  # void:
-  #   model: elasticity-mpm-neo-hookean-damage-current
-  #   E: 10
-  #   nu: 0.45
-  #   fracture_toughness: 100
-  #   damage_scaling: 1
-  #   # damage_viscosity: 0.1
-  #   rho: -1e-5
-  #   use_AT1: false
-  #   residual_stiffness: 0.01
-  #   skip_checks:
-  #   label:
-  #     value: 0
+  material: grains,binder,void
+  void:
+    model: elasticity-mpm-neo-hookean-damage-current
+    E: 0.05
+    nu: 0.0
+    fracture_toughness: 1e6
+    damage_scaling: 1
+    # damage_viscosity: 0.1
+    rho: 1.225e-12
+    use_AT1: false
+    residual_stiffness: 0.01
+    skip_checks:
+    label:
+      value: 0
   binder:
     model: elasticity-mpm-neo-hookean-damage-current
     E: 10 # 274.87 # MPa
     nu: 0.25
     fracture_toughness: 7.4e4 # MPa mm # 0.74 MPa um
     damage_scaling: 1
-    rho: 1.190e-9 # tonnes/mm^3 # 1.190e-15
+    rho: 1.190e-9 # tonnes/mm^3 # 1.190e-15 kg/um^3
     # damage_viscosity: 0.23
     use_AT1: false
-    residual_stiffness: 0.001
+    residual_stiffness: 0.01
     label:
       value: 1
   grains:
     model: elasticity-mpm-neo-hookean-damage-current
-    E: 2200 # MPa
+    E: 1100 # MPa # 22000 MPa
     nu: 0.25
     fracture_toughness: 1.830e5 # MPa mm
     damage_scaling: 1
     # damage_viscosity: 0.1
-    rho: 2.001e-9 # tonnes/mm^3 # 2.001e-15
+    rho: 2.001e-9 # tonnes/mm^3 # 2.001e-15 kg/um^3
     use_AT1: false
-    residual_stiffness: 0.001
+    residual_stiffness: 0.01
     label:
       value: 2
+
+# forcing: body
+# forcing_body_vector: 0,0,-9.81e3 # mm/s^2
 
 dm_plex:
   dim: 3
@@ -58,14 +61,17 @@ dummy:
 surface_force_faces: 1,2
 
 viewer_cgns_batch_size: 1
-ksp_converged_maxits:
+
+# snes_linesearch_type: bisection
+# snes_linesearch_max_it: 50
+# ts_monitor_swarm_interval: 1
 mpm:
   ksp_type: gmres
   ksp_norm_type: unpreconditioned
   pc_jacobi_type: diagonal
   # ksp_type: preonly
 diagnostic_projection:
-  ksp_type: gmres
-  ksp_norm_type: unpreconditioned
-  pc_jacobi_type: diagonal
-  rtol: 1e-10
+  # ksp_type: gmres
+  # ksp_norm_type: unpreconditioned
+  ksp_type: preonly
+  pc_jacobi_type: rowsum
