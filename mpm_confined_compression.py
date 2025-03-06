@@ -92,7 +92,7 @@ def get_mesh(characteristic_length, topology=Topology.CYLINDER, load_fraction=0.
             '-mpm_voxel_pixel_size', f'{DIE_PIXEL_SIZE}',
             '-mpm_void_characteristic_length', f'{characteristic_length*4}',
         ])
-        if load_fraction != 0.5:
+        if load_fraction != 0.05:
             args.extend([
                 '-remap_scale', f'{1-load_fraction}',
                 '-bc_slip_2_translate', f'0,0,{-load_fraction*DIE_HEIGHT}'
@@ -341,7 +341,7 @@ GPUS_PER_NODE = 4
 
 
 @app.command()
-def flux_run(characteristic_length: Annotated[float, typer.Argument(min=1)], topology: Topology, ratel_path: Annotated[Path, typer.Argument(envvar='RATEL_DIR')], n: int = 1,
+def flux_run(characteristic_length: Annotated[float, typer.Argument(min=0)], topology: Topology, ratel_path: Annotated[Path, typer.Argument(envvar='RATEL_DIR')], n: int = 1,
              dry_run: bool = False, ceed: str = '/gpu/hip/gen', additional_args: str = "", material_mesh: Path = None, voxel_data: Path = None, load_fraction: Annotated[float, typer.Option(min=0, max=1)] = 0.05, use_air: bool = False) -> None:
     scratch_dir = f"/p/lustre5/{os.environ['USER']}/ratel"
     Path(scratch_dir).mkdir(parents=True, exist_ok=True)
@@ -372,9 +372,6 @@ def flux_run(characteristic_length: Annotated[float, typer.Argument(min=1)], top
         load_fraction=load_fraction)
     pre = "mpm_" if (material_mesh or voxel_data) else ""
 
-    command = f"{ratel_path / 'bin' / 'ratel-quasistatic'} {' '.join(options)}"
-    num_nodes = int(np.ceil(n / GPUS_PER_NODE))
-
     SCRIPT_PATH.mkdir(exist_ok=True)
 
     if topology == Topology.DIE:
@@ -388,6 +385,9 @@ def flux_run(characteristic_length: Annotated[float, typer.Argument(min=1)], top
     else:
         options_file = OPTIONS_FILE
 
+    if topology != Topology.CUBE:
+        mesh_options[1] = f'meshes/{Path(mesh_options[1]).name}'
+
     options = [
         "-options_file", f"$SCRATCH/Ratel_Solver_Options.yml",
         "-options_file", f"$SCRATCH/Material_Options.yml",
@@ -396,11 +396,15 @@ def flux_run(characteristic_length: Annotated[float, typer.Argument(min=1)], top
         f"-{pre}grains_characteristic_length", f"{4*characteristic_length}",
         *mesh_options,
         "-ts_monitor_diagnostic_quantities", f"cgns:$SCRATCH/diagnostic_%06d.cgns",
+        "-ts_monitor_solution", f"cgns:$SCRATCH/solution_%06d.cgns",
         "-ts_monitor_surface_force_per_face", f"ascii:$SCRATCH/forces.csv",
         "-ts_monitor_strain_energy", f"ascii:$SCRATCH/strain_energy.csv",
-        "-ts_monitor_swarm", f"ascii:$SCRATCH/swarm.xmf",
+        "-ts_monitor_swarm_solution", f"ascii:$SCRATCH/swarm.xmf",
+        "-viewer_cgns_batch_size", "1",
         *additional_args.split()
     ]
+    command = f"{ratel_path / 'bin' / 'ratel-quasistatic'} {' '.join(options)}"
+    num_nodes = int(np.ceil(n / GPUS_PER_NODE))
 
     script_file = None
     with tempfile.NamedTemporaryFile(mode='w', dir=SCRIPT_PATH, delete=False) as f:
@@ -414,10 +418,11 @@ def flux_run(characteristic_length: Annotated[float, typer.Argument(min=1)], top
             '#flux: -x',
             '#flux: -t 24h',
             '#flux: -q pbatch',
-            '#flux: --output=output_{{id}}.txt',
+            '#flux: --output=flux_output/output_{{id}}.txt',
             f'#flux: --job-name=ratel_mpm_{topology.value}_CL{int(characteristic_length):03}',
             '#flux: -B guests',
             '#flux: --setattr=thp=always # Transparent Huge Pages',
+            "#flux: --setattr=hugepages=512GB"
             '#flux: -l # Add task rank prefixes to each line of output.',
             '',
             f'export INPUT_DIRECTORY={Path(__file__).parent}',
@@ -447,7 +452,7 @@ def flux_run(characteristic_length: Annotated[float, typer.Argument(min=1)], top
             'export HSA_XNACK=1',
             'export MPICH_GPU_SUPPORT_ENABLED=1',
             '',
-            f'export SCRATCH={scratch_dir}/MPM-{topology.value}-CL{int(characteristic_length):03}-$CENTER_JOB_ID',
+            f'export SCRATCH={scratch_dir}/MPM-{topology.value}-CL{characteristic_length}-$CENTER_JOB_ID',
             'echo ""',
             'echo "Scratch = $SCRATCH"',
             'echo ""',
