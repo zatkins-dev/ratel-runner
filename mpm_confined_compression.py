@@ -4,6 +4,7 @@ import typer
 import enum
 from pathlib import Path
 import subprocess
+from multiprocessing import cpu_count
 from os import environ as env
 from typing_extensions import Annotated
 import numpy as np
@@ -170,7 +171,11 @@ def get_cylinder_mesh(characteristic_length, radius=2534.72400368, height=4420.3
     gmsh.model.mesh.setRecombine(SURFACE, disk)
 
     # set mesh options
-    gmsh.option.setNumber("Mesh.MeshSizeMin", 0.5)
+    gmsh.option.setNumber("General.NumThreads", cpu_count())
+    gmsh.option.setNumber("Mesh.RecombinationAlgorithm", 3)
+    gmsh.option.setNumber("Mesh.Algorithm", 8)
+    gmsh.option.setNumber("Mesh.Algorithm3D", 10)
+    gmsh.option.setNumber("Mesh.MeshSizeMin", 0.75)
     gmsh.option.setNumber("Mesh.MeshSizeMax", 1.0)
     gmsh.option.setNumber("Mesh.MeshSizeFactor", characteristic_length)
     gmsh.option.setNumber("Mesh.ElementOrder", element_order)
