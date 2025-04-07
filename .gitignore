@@ -8,3 +8,6 @@ meshes/*
 *.xmf
 flux_scripts/*
 *.yml
+__pycache__/
+output/
+cache/

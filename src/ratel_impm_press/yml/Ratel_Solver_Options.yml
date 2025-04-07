@@ -3,14 +3,19 @@ dm_plex_hash_location:
 
 # MPM projection
 mpm:
-  ksp_type: gmres
+  ksp_type: bcgs
   ksp_norm_type: preconditioned
   pc_jacobi_type: diagonal
 
+# Diagnostic projection
+diagnostic_projection:
+  ksp_type: bcgs
+  ksp_norm_type: preconditioned
+  pc_jacobi_type: diagonal
 
 # TS
 ts:
-  dt: 0.005
+  dt: 0.001
   atol: 1e-2
   rtol: 4e-1
   max_snes_failures: -1
@@ -20,13 +25,20 @@ ts:
     clip: 0.5,1.5
     dt:
       min: 1e-8
-      max: 5e-3
+      max: 1e-3
   view:
   monitor:
-  monitor_diagnostic_quantities_interval: 4
-  monitor_solution_interval: 2
-  monitor_swarm_solution_interval: 4
-  monitor_swarm_interval: 5
+  monitor_surface_force_per_face: ascii:forces.csv
+  monitor_strain_energy: ascii:strain_energy.csv
+  monitor_diagnostic_quantities: cgns:diagnostic_%06d.cgns
+  monitor_diagnostic_quantities_interval: 5
+  monitor_solution: cgns:solution_%06d.cgns
+  monitor_solution_interval: 5
+  monitor_swarm_solution: ascii:swarm.xmf
+  monitor_swarm_solution_interval: 10
+  monitor_swarm_fields: J,volume,rho,material
+
+viewer_cgns_batch_size: 1
 
 # SNES
 snes:
@@ -35,7 +47,6 @@ snes:
     type: cp
     monitor:
     max_it: 10
-  # max_linear_solve_fail: 6
   max_it: 50
   monitor:
   rtol: 1e-8
@@ -48,7 +59,7 @@ snes:
 
 # KSP
 ksp:
-  type: bcgs
+  type: bcgsl
   norm_type: preconditioned
   max_it: 5000
   rtol: 1e-6
