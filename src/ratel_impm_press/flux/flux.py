@@ -27,6 +27,11 @@ def generate(experiment: ExperimentConfig, machine: Machine | None, num_processe
         if machine is None:
             raise ValueError("Could not detect machine. Please specify a machine.")
 
+    if not output_dir.exists():
+        output_dir.mkdir(parents=True)
+    if not (output_dir / 'flux_output').exists():
+        (output_dir / 'flux_output').mkdir(parents=True)
+
     machine_config = get_machine_config(machine)
     num_nodes = int(ceil(num_processes / machine_config.gpus_per_node))
     num_processes_total = num_processes + (machine_config.gpus_per_node - num_processes % machine_config.gpus_per_node)
