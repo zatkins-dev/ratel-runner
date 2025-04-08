@@ -5,6 +5,7 @@ from rich.logging import RichHandler
 from rich.theme import Theme
 
 from .experiments import press_no_air, press_sticky_air
+from . import build
 from . import config
 
 
@@ -29,6 +30,7 @@ app.add_typer(press_app, name="press")
 press_app.add_typer(press_sticky_air.app, name="sticky-air")
 # app.add_typer(efficiency.app, name="efficiency")
 app.add_typer(config.app, name="config")
+app.add_typer(build.app, name="build")
 
 if __name__ == "__main__":
     app()

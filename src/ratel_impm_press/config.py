@@ -25,6 +25,22 @@ def _get_config():
 
 
 @app.command()
+def unset(key: str):
+    """
+    Remove a key from the configuration file.
+    """
+    config_file = _get_config()
+    config = json.loads(config_file.read_text())
+
+    if key in config:
+        del config[key]
+        config_file.write_text(json.dumps(config, indent=2))
+        print(f"Removed {key} from configuration.")
+    else:
+        print(f"Key {key} not found in configuration.")
+
+
+@app.command()
 def set(key: str, value: str):
     config_file = _get_config()
     config = json.loads(config_file.read_text())
