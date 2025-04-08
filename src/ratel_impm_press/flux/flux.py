@@ -52,7 +52,7 @@ def generate(experiment: ExperimentConfig, machine: Machine | None, num_processe
         '#flux: -x',
         f'#flux: -t {max_time if max_time is not None else machine_config.max_time}',
         f'#flux: -q {machine_config.partition}',
-        '#flux: --output=flux_output/output_{{id}}.txt',
+        f'#flux: --output={output_dir / "flux_output"}' '/output_{{id}}.txt',
         f'#flux: --job-name={experiment.name}',
         f'#flux: -B {machine_config.bank}',
         '#flux: --setattr=thp=always # Transparent Huge Pages',
