@@ -39,13 +39,13 @@ def build_ratel():
     config_file = repo.dir / 'config.mk'
     if not config_file.exists():
         print("[info]Creating default configuration file.")
-        config = CONFIG_DEFAULT + "\n".join([
+        config_str = CONFIG_DEFAULT + "\n".join([
             f"PETSC_DIR={petsc_dir}",
             f"PETSC_ARCH={petsc_arch}",
             f"CEED_DIR={libceed_dir}",
             ""
         ])
-        config_file.write_text(config)
+        config_file.write_text(config_str)
 
     # Run the make command
     make_command = ["make", "-j"]
