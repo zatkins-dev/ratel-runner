@@ -4,7 +4,6 @@ import importlib.resources
 import shutil
 from rich import print
 import re
-import os
 
 from ..flux.machines import Machine, detect_machine
 from .. import config
@@ -87,6 +86,8 @@ def build_petsc():
     if len(matches) > 0:
         petsc_arch = matches[-1]
         print(f"[info]Using PETSC_ARCH={petsc_arch} from {petscvars}")
+
+    config.set("PETSC_DIR", str(repo.dir))
 
     print(f"[success]PETSc build complete with PETSC_DIR={repo.dir} and PETSC_ARCH={petsc_arch}.")
     return repo.dir, petsc_arch

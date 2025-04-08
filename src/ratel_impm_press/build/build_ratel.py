@@ -4,6 +4,7 @@ from rich import print
 from .git import Repository
 from .build import app
 from . import build_petsc, build_libceed
+from .. import config
 
 URI = "https://gitlab.com/micromorph/ratel.git"
 CONFIG_DEFAULT = """# Ratel configuration file
@@ -51,5 +52,7 @@ def build_ratel():
     print("[info]Running make command:")
     print("  > ", " ".join(make_command))
     subprocess.run(make_command, cwd=repo.dir, check=True)
+
+    config.set("RATEL_DIR", str(repo.dir))
 
     print("[success]Ratel build complete with ", f"RATEL_DIR={repo.dir}.")

@@ -3,6 +3,7 @@ from rich import print
 
 from .git import Repository
 from .build import app
+from .. import config
 
 URI = "https://github.com/CEED/libCEED.git"
 CONFIG_DEFAULT = """# libCEED configuration file
@@ -46,6 +47,9 @@ def build_libceed():
     print("[info]Running make command:")
     print("  > ", " ".join(make_command))
     subprocess.run(make_command, cwd=repo.dir, check=True)
+
+    # Save the directory
+    config.set("LIBCEED_DIR", str(repo.dir))
 
     print(f"[success]libCEED build complete with LIBCEED_DIR={repo.dir}.")
     return repo.dir
