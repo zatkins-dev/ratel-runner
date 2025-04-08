@@ -9,7 +9,7 @@ URI = "https://github.com/CEED/libCEED.git"
 CONFIG_DEFAULT = """# libCEED configuration file
 OPT=-O3 -g -fno-signed-zeros -freciprocal-math -ffp-contract=fast -march=native -fPIC -Wno-pass-failed -fassociative-math -fno-math-errno
 
-ROCM_DIR=${{ROCM_PATH}}
+HIP_DIR=${{ROCM_PATH}}
 CC=$(shell which mpicc)
 CXX=$(shell which mpicxx)
 FC=
