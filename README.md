@@ -4,9 +4,14 @@ Questions, comments, or concerns? Contact Zach Atkins or leave an issue.
 
 
 ## Installation
+If building on Tuolumne, ensure you have a new enough Python version:
+```
+ml +cray-python
+```
+
 To install the python package, run:
 ```sh
-pip install --upgrade git+https://github.com/zatkins-dev/Ratel-iMPM-Press.git
+pip install --user --upgrade git+https://github.com/zatkins-dev/Ratel-iMPM-Press.git
 ```
 
 Set an appropriate `SCRATCH_DIR` and `OUTPUT_DIR`, e.g.
