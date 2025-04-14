@@ -32,6 +32,7 @@ class Repository:
     def is_up_to_date(self):
         """Check if the repository is up to date."""
         try:
+            subprocess.run(['git', 'fetch'], cwd=self.dir, check=True)
             result = subprocess.run(['git', 'status'], cwd=self.dir, check=True, capture_output=True)
             return "Your branch is up to date" in result.stdout.decode()
         except subprocess.CalledProcessError:

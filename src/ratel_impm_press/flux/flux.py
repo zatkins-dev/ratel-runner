@@ -33,7 +33,8 @@ def generate(experiment: ExperimentConfig, machine: Machine | None, num_processe
         (output_dir / 'flux_output').mkdir(parents=True)
     machine_config = get_machine_config(machine)
     num_nodes = int(ceil(num_processes / machine_config.gpus_per_node))
-    num_processes_total = num_processes + (machine_config.gpus_per_node - num_processes % machine_config.gpus_per_node)
+    num_processes_total = num_processes + \
+        ((machine_config.gpus_per_node - num_processes) % machine_config.gpus_per_node)
 
     print(f'{experiment}')
     print("")
@@ -103,7 +104,7 @@ def generate(experiment: ExperimentConfig, machine: Machine | None, num_processe
         'echo "-->Starting simulation at $(date)"',
         'echo ""',
         '',
-        f'flux run -N{num_nodes} -n{num_processes} -g1 --verbose --setopt=mpibind=verbose:1 \\',
+        f'flux run -N{num_nodes} -n{num_processes} -g1 -x --verbose --setopt=mpibind=verbose:1 \\',
         f'  {command} > "$SCRATCH/run.log" 2>&1',
         '',
         'echo ""',
