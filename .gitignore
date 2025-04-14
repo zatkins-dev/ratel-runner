@@ -11,3 +11,4 @@ flux_scripts/*
 __pycache__/
 output/
 cache/
+dist/

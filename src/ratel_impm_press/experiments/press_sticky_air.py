@@ -9,10 +9,11 @@ from rich import print
 from .press_common import get_mesh, DIE_HEIGHT
 from ..experiment import ExperimentConfig
 from ..flux import flux, machines
+from .. import local
 from .. import config
 
 
-__doc__ = "Die press experiment using voxelized CT data and a synthetic mesh"
+__doc__ = "Die press experiment using voxelized CT data and a synthetic mesh, using sticky air for voids"
 _material_config_file = importlib.resources.files('ratel_impm_press') / 'yml' / 'Material_Options_Voxel_Air.yml'
 _solver_config_file = importlib.resources.files('ratel_impm_press') / 'yml' / 'Ratel_Solver_Options.yml'
 
@@ -55,6 +56,19 @@ class PressStickyAirExperiment(ExperimentConfig):
         ])
         return options
 
+    def __str__(self) -> str:
+        output = '\n'.join([
+            f'[h1]Ratel iMPM Experiment[/]',
+            f'{self.description}',
+            f"\n[h2]Mesh Options[/]",
+            f"  • Characteristic length: {self.characteristic_length}",
+            f"  • Voxel data: {self.voxel_data}",
+        ])
+        if self.user_options:
+            output += "\n[h2]User Options[/]\n"
+            output += "\n".join([f"  • {key}: {value}" for key, value in self.user_options.items()])
+        return output
+
 
 app = typer.Typer()
 
@@ -70,95 +84,37 @@ def write_config(voxel_data: Path, characteristic_length: Annotated[float, typer
     experiment.write_config(output_dir)
 
 
-@app.command()
-def run(voxel_data: Path, characteristic_length: Annotated[float, typer.Argument(min=0, max=DIE_HEIGHT / 4)], load_fraction: Annotated[float, typer.Argument(min=0.0, max=1.0)] = 0.4,
-        num_processes: Annotated[int, typer.Option("-n", min=1)] = 1, ratel_dir: Path = None, out: Path = None, scratch_dir: Path = None, ceed: str = '/cpu/self', additional_args: str = "",
+@app.command(
+    context_settings={"allow_extra_args": True, "ignore_unknown_options": True}
+)
+def run(ctx: typer.Context, voxel_data: Path, characteristic_length: Annotated[float, typer.Argument(min=0, max=DIE_HEIGHT / 4)], load_fraction: Annotated[float, typer.Argument(min=0.0, max=1.0)] = 0.4,
+        num_processes: Annotated[int, typer.Option("-n", min=1)] = 1, ratel_dir: Path = None, out: Path = None, scratch_dir: Path = None,
         dry_run: bool = False):
-    # Resolve paths
-    if ratel_dir is None:
-        ratel_dir = Path(config.get_fallback('RATEL_DIR')).resolve()
     if scratch_dir is None:
         scratch_dir = Path(config.get_fallback('SCRATCH_DIR')).resolve()
-    output_dir = Path(config.get_fallback('OUTPUT_DIR', Path.cwd() / 'output')).resolve()
-
-    print(f"\n[h1]RATEL iMPM PRESS EXPERIMENT[/]")
-    print(f"\n[h2]Mesh Options[/]")
-    print(f"  • Characteristic length: {characteristic_length}")
-    print(f"  • Voxel data: {voxel_data}")
-    print(f"\n[h2]Simulation Options[/]")
-    print(f"  • Ratel path: {ratel_dir}")
-    print(f"  • Output directory: {output_dir}")
-    print(f"  • Number of processes: {num_processes}")
-    print(f"  • Ceed backend: {ceed}")
-    if additional_args:
-        print(f"  • Additional arguments: {additional_args}")
-    print("")
-
     experiment = PressStickyAirExperiment(voxel_data, characteristic_length, load_fraction, scratch_dir)
-
-    if out is not None:
-        output_dir = output_dir / out
-    else:
-        output_dir = output_dir / f"{experiment.name}-{datetime.datetime.now().strftime(r'%Y-%m-%d_%H-%M-%S')}"
-    output_dir = output_dir.resolve()
-    if output_dir.exists():
-        for file in output_dir.glob("*"):
-            file.unlink()
-        output_dir.rmdir()
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    config_file = experiment.write_config(output_dir)
-    out_file = output_dir / "stdout.txt"
-    err_file = output_dir / "stderr.txt"
-    ratel_exe = ratel_dir / 'bin' / 'ratel-quasistatic'
-    options = [
-        "-options_file", f"{config_file.resolve()}",
-        "-ceed", f"{ceed}",
-        *additional_args.split(),
-    ]
-    if num_processes > 1:
-        cmd_arr = ["mpirun", "-np", f"{num_processes}", f"{ratel_exe}", *options]
-    else:
-        cmd_arr = [f"{ratel_exe}", *options]
-    print(f"\n[h1]Running experiment[/]\n")
-    print(f"[info]Running:\n  > [/]{' '.join(cmd_arr)}")
-
-    if dry_run:
-        print("[success]Dry run, exiting[/]")
-        return
-
-    if not dry_run:
-        with out_file.open('wb') as out, err_file.open('wb') as err:
-            subprocess.run(cmd_arr, cwd=output_dir.resolve(), stdout=out, stderr=err)
-    else:
-        print(f"Command: {' '.join(cmd_arr)}")
+    experiment.user_options = ctx.args
+    local.run(
+        experiment,
+        num_processes=num_processes,
+        ratel_dir=ratel_dir,
+        out=out,
+        scratch_dir=scratch_dir,
+        dry_run=dry_run
+    )
 
 
-@app.command()
-def flux_run(voxel_data: Path, characteristic_length: Annotated[float, typer.Argument(min=0, max=DIE_HEIGHT / 4)], load_fraction: Annotated[float, typer.Argument(min=0.0, max=1.0)] = 0.4,
+@app.command(
+    context_settings={"allow_extra_args": True, "ignore_unknown_options": True}
+)
+def flux_run(ctx: typer.Context, voxel_data: Path, characteristic_length: Annotated[float, typer.Argument(min=0, max=DIE_HEIGHT / 4)], load_fraction: Annotated[float, typer.Argument(min=0.0, max=1.0)] = 0.4,
              num_processes: Annotated[int, typer.Option("-n", min=1)] = 1, max_time: str = None, log_view: bool = False, machine: Optional[machines.Machine] = None, ratel_dir: Path = None,
-             output_dir: Path = None, scratch_dir: Path = None, additional_args: str = "", dry_run: bool = False):
+             output_dir: Path = None, scratch_dir: Path = None, dry_run: bool = False):
     """Run the efficiency experiment using flux."""
-    if ratel_dir is None:
-        ratel_dir = Path(config.get_fallback('RATEL_DIR')).resolve()
     if scratch_dir is None:
         scratch_dir = Path(config.get_fallback('SCRATCH_DIR')).resolve()
-    if output_dir is None:
-        output_dir = Path(config.get_fallback('OUTPUT_DIR', Path.cwd() / 'output')).resolve()
-
-    print(f"\n[h1]RATEL iMPM PRESS EXPERIMENTS[/]")
-    print(f"\n[h2]Mesh Options[/]")
-    print(f"  • Characteristic length: {characteristic_length}")
-    print(f"  • Voxel data: {voxel_data}")
-    print(f"\n[h2]Simulation Options[/]")
-    print(f"  • Ratel path: {ratel_dir}")
-    print(f"  • Output directory: {output_dir}")
-    print(f"  • Number of processes: {num_processes}")
-    if additional_args:
-        print(f"  • Additional arguments: {additional_args}")
-    print("")
-
     experiment = PressStickyAirExperiment(voxel_data, characteristic_length, load_fraction, scratch_dir)
+    experiment.user_options = ctx.args
     experiment.logview = log_view
     script_file = flux.generate(
         experiment,
@@ -167,7 +123,7 @@ def flux_run(voxel_data: Path, characteristic_length: Annotated[float, typer.Arg
         max_time=max_time,
         output_dir=output_dir,
         ratel_dir=ratel_dir,
-        scratch_dir=scratch_dir,
-        additional_args=additional_args)
+        scratch_dir=scratch_dir
+    )
     if not dry_run:
         flux.run(script_file)

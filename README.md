@@ -82,10 +82,9 @@ exit
 ratel-impm-press press sticky-air flux-run /path/to/voxel/data 0.02 0.4 -n 16
 ```
 
-Alternate material properties can be provided via the `--additional-args` flag.
+Alternate material properties can be provided as additional flags to the `flux-run` command.
 For example, to change the fracture toughness of the `binder` material, you could run
 ```sh
-ratel-impm-press press sticky-air flux-run /path/to/voxel/data 0.02 0.4 -n 1 --additional-args '-mpm_binder_fracture_toughness 1e2'
+ratel-impm-press press sticky-air flux-run /path/to/voxel/data 0.02 0.4 -n 1 --mpm_binder_fracture_toughness 1e2
 ```
-Note: single quotes around the additional arguments are needed to prevent bash from getting confused.
-If desired, more flags for commonly changed properties can be added.
+Note: an extra `-` is required when compared to executing Ratel directly.
