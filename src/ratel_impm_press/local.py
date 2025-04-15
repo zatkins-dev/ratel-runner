@@ -27,7 +27,6 @@ def run(experiment: ExperimentConfig, num_processes: int = 1, ratel_dir: Path = 
     else:
         run_dir = scratch_dir / 'output' / f"{experiment.name}-{datetime.datetime.now().strftime(r'%Y-%m-%d_%H-%M-%S')}"
     run_dir = run_dir.resolve()
-    experiment.user_options = []
     print(f'{experiment}')
     print("")
     print(f"[h2]Simulation Options[/]")

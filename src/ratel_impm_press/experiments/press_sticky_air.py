@@ -58,7 +58,7 @@ class PressStickyAirExperiment(ExperimentConfig):
 
     def __str__(self) -> str:
         output = '\n'.join([
-            f'[h1]Ratel iMPM Experiment[/]',
+            f'[h1]Ratel iMPM Press Experiment, sticky air[/]',
             f'{self.description}',
             f"\n[h2]Mesh Options[/]",
             f"  • Characteristic length: {self.characteristic_length}",
