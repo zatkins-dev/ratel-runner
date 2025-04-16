@@ -193,6 +193,7 @@ def flux_sweep(
         ratel_dir=ratel_dir,
         scratch_dir=scratch_dir,
         parameters=sweep_params,
+        sweep_name=sweep_spec.stem,
         yes=yes,
         dry_run=dry_run
     )

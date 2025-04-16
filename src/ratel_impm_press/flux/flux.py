@@ -163,6 +163,7 @@ def sweep(
     ratel_dir: Path = None,
     scratch_dir: Path = None,
     parameters: dict = {},
+    sweep_name: str = 'sweep',
     yes: bool = False,
     dry_run: bool = False,
 ):
@@ -184,7 +185,7 @@ def sweep(
     if not output_dir.exists():
         output_dir.mkdir(parents=True)
 
-    sweep_name = experiment.name + '-sweep-' + '-'.join(parameters.keys())
+    sweep_name = experiment.name + f'-{sweep_name}-' + '-'.join(parameters.keys())
     sweep_script_dir = (scratch_dir / 'flux_scripts' / sweep_name).resolve()
     sweep_output_dir = (output_dir / sweep_name).resolve()
 
