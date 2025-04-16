@@ -18,13 +18,16 @@ DIE_HEIGHT = 8.51913386  # mm # 8519.13386 um, 1010 pixels
 DIE_CENTER = [2.65695759, 2.65695759, 0]  # [2656.95759, 2656.95759, 0] um, 315, 315, 0 pixels
 
 
-def get_mesh(characteristic_length: float, voxel_data: Path, scratch_dir: Path, load_fraction=0.4) -> str:
+def get_mesh(characteristic_length: float, voxel_data: Path,
+             scratch_dir: Path, load_fraction=0.4, clamp_top=True) -> str:
     """
     Get a mesh file for the given voxel data and characteristic length, generating if necessary.
 
     :param characteristic_length: The desired characteristic length for the mesh.
     :param voxel_data: Path to the voxel data file (e.g., CT scan).
+    :param scratch_dir: Directory to store the generated mesh file.
     :param load_fraction: Fraction of the load to apply to the die (default is 0.4).
+    :param clamp_top: Whether to clamp the top of the die (default is True).
 
     :return: A dictionary of mesh options for the experiment configuration.
     """
@@ -42,20 +45,38 @@ def get_mesh(characteristic_length: float, voxel_data: Path, scratch_dir: Path, 
         "  dim: 3",
         "  simplex: 0",
         "",
-        "bc:",
-        "  clamp: 1,2",
-        "  # Clamped displacement for top and bottom",
-        "  clamp_2:",
-        f"    translate: 0,0,{-load_fraction * DIE_HEIGHT} # -load_fraction * height",
-        "  # Prevent x,y expansion beyond the die boundary",
-        "  slip: 3",
-        "  slip_3_components: 0,1",
-        "",
         "remap:",
         f"  direction: z",
         f"  scale: {(1 - load_fraction)} # (1 - load_fraction) to match displacement",
         "",
     ])
+    if clamp_top:
+        options += '\n'.join([
+            "bc:",
+            "  clamp: 1,2",
+            "  # Clamped displacement for top and bottom",
+            "  clamp_2:",
+            f"    translate: 0,0,{-load_fraction * DIE_HEIGHT} # -load_fraction * height",
+            "  # Prevent x,y expansion beyond the die boundary",
+            "  slip: 3",
+            "  slip_3:",
+            "    components: 0,1",
+            "",
+        ])
+    else:
+        options += '\n'.join([
+            "bc:",
+            "  slip: 1,2,3",
+            "  # Allow x,y displacement for top and bottom, prescribe z displacement",
+            "  slip_1:",
+            "    components: 2",
+            "  slip_2:",
+            "    components: 2",
+            f"    translate: {-load_fraction * DIE_HEIGHT} # -load_fraction * height",
+            "  slip_3:",
+            "    components: 0,1",
+            "",
+        ])
 
     print(f"[info]Generated mesh options:[/]")
     syntax = Syntax(options, "yaml")
