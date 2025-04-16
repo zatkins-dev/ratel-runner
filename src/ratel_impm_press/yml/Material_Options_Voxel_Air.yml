@@ -9,7 +9,7 @@ mpm:
   material: grains,binder,void
   void:
     model: elasticity-mpm-neo-hookean-damage-current
-    E: 10
+    E: 0.1
     nu: 0.0
     fracture_toughness: 1e6
     damage_scaling: 1
