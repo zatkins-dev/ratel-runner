@@ -1,15 +1,10 @@
 # This module is responsible for running experiments locally.
 from pathlib import Path
-from math import ceil
-import tempfile
-import rich
+from rich import print
 import subprocess
 
 from . import config
 from .experiment import ExperimentConfig
-
-console = rich.get_console()
-print = console.print
 
 
 def run(experiment: ExperimentConfig, num_processes: int = 1, ratel_dir: Path = None,

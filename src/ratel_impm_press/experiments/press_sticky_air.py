@@ -2,9 +2,7 @@ from pathlib import Path
 import importlib.resources
 import typer
 from typing import Optional, Annotated
-import datetime
-import subprocess
-from rich import print
+from ..sweep import load_sweep_specification
 
 from .press_common import get_mesh, DIE_HEIGHT
 from ..experiment import ExperimentConfig
@@ -73,23 +71,21 @@ class PressStickyAirExperiment(ExperimentConfig):
 app = typer.Typer()
 
 
-@app.command()
-def write_config(voxel_data: Path, characteristic_length: Annotated[float, typer.Argument(min=0, max=DIE_HEIGHT / 4)], load_fraction: Annotated[float, typer.Argument(min=0.0, max=1.0)] = 0.4,
-                 output_dir: Annotated[Path, typer.Option(file_okay=False, resolve_path=True)] = Path.cwd(), log_view: bool = False):
-    """Generate the efficiency experiment configuration."""
-    experiment = PressStickyAirExperiment(voxel_data, characteristic_length, load_fraction)
-    if not output_dir.exists():
-        output_dir.mkdir(parents=True, exist_ok=True)
-    experiment.logview = log_view
-    experiment.write_config(output_dir)
-
-
 @app.command(
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True}
 )
-def run(ctx: typer.Context, voxel_data: Path, characteristic_length: Annotated[float, typer.Argument(min=0, max=DIE_HEIGHT / 4)], load_fraction: Annotated[float, typer.Argument(min=0.0, max=1.0)] = 0.4,
-        num_processes: Annotated[int, typer.Option("-n", min=1)] = 1, ratel_dir: Path = None, out: Path = None, scratch_dir: Path = None,
-        dry_run: bool = False):
+def run(
+    ctx: typer.Context,
+    voxel_data: Path,
+    characteristic_length: Annotated[float, typer.Argument(min=0, max=DIE_HEIGHT / 4)],
+    load_fraction: Annotated[float, typer.Argument(min=0.0, max=1.0)] = 0.4,
+    num_processes: Annotated[int, typer.Option("-n", min=1)] = 1,
+    ratel_dir: Path = None,
+    out: Path = None,
+    scratch_dir: Path = None,
+    dry_run: bool = False
+):
+    """Run the experiment in the current shell (blocking)"""
     if scratch_dir is None:
         scratch_dir = Path(config.get_fallback('SCRATCH_DIR')).resolve()
     experiment = PressStickyAirExperiment(voxel_data, characteristic_length, load_fraction, scratch_dir)
@@ -107,16 +103,27 @@ def run(ctx: typer.Context, voxel_data: Path, characteristic_length: Annotated[f
 @app.command(
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True}
 )
-def flux_run(ctx: typer.Context, voxel_data: Path, characteristic_length: Annotated[float, typer.Argument(min=0, max=DIE_HEIGHT / 4)], load_fraction: Annotated[float, typer.Argument(min=0.0, max=1.0)] = 0.4,
-             num_processes: Annotated[int, typer.Option("-n", min=1)] = 1, max_time: str = None, log_view: bool = False, machine: Optional[machines.Machine] = None, ratel_dir: Path = None,
-             output_dir: Path = None, scratch_dir: Path = None, dry_run: bool = False):
-    """Run the efficiency experiment using flux."""
+def flux_run(
+    ctx: typer.Context,
+    voxel_data: Path,
+    characteristic_length: Annotated[float, typer.Argument(min=0, max=DIE_HEIGHT / 4)],
+    load_fraction: Annotated[float, typer.Argument(min=0.0, max=1.0)] = 0.4,
+    num_processes: Annotated[int, typer.Option("-n", min=1)] = 1,
+    max_time: str = None,
+    log_view: bool = False,
+    machine: Optional[machines.Machine] = None,
+    ratel_dir: Path = None,
+    output_dir: Path = None,
+    scratch_dir: Path = None,
+    dry_run: bool = False
+):
+    """Run the experiment using the Flux job scheduler"""
     if scratch_dir is None:
         scratch_dir = Path(config.get_fallback('SCRATCH_DIR')).resolve()
     experiment = PressStickyAirExperiment(voxel_data, characteristic_length, load_fraction, scratch_dir)
     experiment.user_options = ctx.args
     experiment.logview = log_view
-    script_file = flux.generate(
+    script_file, _ = flux.generate(
         experiment,
         machine=machine,
         num_processes=num_processes,
@@ -127,3 +134,43 @@ def flux_run(ctx: typer.Context, voxel_data: Path, characteristic_length: Annota
     )
     if not dry_run:
         flux.run(script_file)
+
+
+@app.command(
+    context_settings={"allow_extra_args": True, "ignore_unknown_options": True}
+)
+def flux_sweep(
+    ctx: typer.Context,
+    sweep_spec: Path,
+    voxel_data: Path,
+    characteristic_length: Annotated[float, typer.Argument(min=0, max=DIE_HEIGHT / 4)],
+    load_fraction: Annotated[float, typer.Argument(min=0.0, max=1.0)] = 0.4,
+    num_processes: Annotated[int, typer.Option("-n", min=1)] = 1,
+    max_time: Annotated[str, typer.Option("-t")] = None,
+    log_view: bool = False,
+    machine: Optional[machines.Machine] = None,
+    ratel_dir: Path = None,
+    output_dir: Path = None,
+    scratch_dir: Path = None,
+    yes: Annotated[bool, typer.Option('-y')] = False,
+    dry_run: bool = False,
+):
+    """Run a parameter sweep using the Flux job scheduler."""
+    if scratch_dir is None:
+        scratch_dir = Path(config.get_fallback('SCRATCH_DIR')).resolve()
+    experiment = PressStickyAirExperiment(voxel_data, characteristic_length, load_fraction, scratch_dir)
+    sweep_params = load_sweep_specification(ctx, sweep_spec, quiet=True)
+    experiment.user_options = ctx.args
+    experiment.logview = log_view
+    flux.sweep(
+        experiment,
+        machine=machine,
+        num_processes=num_processes,
+        max_time=max_time,
+        output_dir=output_dir,
+        ratel_dir=ratel_dir,
+        scratch_dir=scratch_dir,
+        parameters=sweep_params,
+        yes=yes,
+        dry_run=dry_run
+    )
