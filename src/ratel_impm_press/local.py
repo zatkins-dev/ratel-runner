@@ -2,6 +2,7 @@
 from pathlib import Path
 from rich import print
 import subprocess
+import datetime
 
 from . import config
 from .experiment import ExperimentConfig
@@ -36,7 +37,7 @@ def run(experiment: ExperimentConfig, num_processes: int = 1, ratel_dir: Path = 
             file.unlink()
         run_dir.rmdir()
     run_dir.mkdir(parents=True, exist_ok=True)
-    output_link = output_dir / run_dir.stem
+    output_link = output_dir / run_dir.name
     if output_link.exists():
         output_link.unlink()
     output_link.symlink_to(run_dir, True)

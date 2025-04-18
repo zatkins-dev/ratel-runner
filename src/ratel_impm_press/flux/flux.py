@@ -65,7 +65,7 @@ def generate(
     name = experiment.name if link_name is None else link_name
     options_file = options_file.rename(temp_dir / (name + '.yaml'))
     output_link = output_dir.resolve() if link_name is None else output_dir.resolve() / link_name
-    if output_link.exists():
+    if output_link.exists() and not link_name:
         output_link.unlink()
 
     command = f'{ratel_dir}/bin/ratel-quasistatic -ceed {machine_config.ceed_backend} -options_file "$SCRATCH/options.yml" {additional_args}'
@@ -120,7 +120,7 @@ def generate(
         'echo "-->Starting simulation at $(date)"',
         'echo ""',
         '',
-        f'flux run -N{num_nodes} -n{num_processes} -g1 -x --verbose --setopt=mpibind=verbose:1 \\',
+        f'flux run -N{num_nodes} -n{num_processes} -g1 -x --verbose -l --setopt=mpibind=verbose:1 \\',
         f'  {command} > "$SCRATCH/run.log" 2>&1',
         '',
         'echo ""',
