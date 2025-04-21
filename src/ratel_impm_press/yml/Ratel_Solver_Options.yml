@@ -31,11 +31,11 @@ ts:
   monitor_surface_force_per_face: ascii:forces.csv
   monitor_strain_energy: ascii:strain_energy.csv
   monitor_diagnostic_quantities: cgns:diagnostic_%06d.cgns
-  monitor_diagnostic_quantities_interval: 20
+  monitor_diagnostic_quantities_interval: 200
   monitor_solution: cgns:solution_%06d.cgns
-  monitor_solution_interval: 20
+  monitor_solution_interval: 200
   monitor_swarm_solution: ascii:swarm.xmf
-  monitor_swarm_solution_interval: 40
+  monitor_swarm_solution_interval: 200
   monitor_swarm_fields: J,volume,rho,material
 
 viewer_cgns_batch_size: 1
@@ -44,9 +44,8 @@ viewer_cgns_batch_size: 1
 snes:
   type: newtonls
   linesearch:
-    type: cp
+    type: bisection
     monitor:
-    max_it: 10
   max_it: 50
   monitor:
   rtol: 1e-8

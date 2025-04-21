@@ -1,6 +1,6 @@
 [project]
 name = "ratel-impm-press"
-version = "0.1.12.2"
+version = "0.1.13"
 description = "Press Experiment Scripts for Ratel Implicit Material Point Method"
 authors = [
     {name = "Zach Atkins",email = "zach.atkins@colorado.edu"}
@@ -12,6 +12,7 @@ dependencies = [
     "typer (>=0.15.2,<0.16.0)",
     "gmsh (>=4.13.1,<5.0.0)",
     "pyyaml (>=6.0.2,<7.0.0)",
+    "pandas (>=2.2.3,<3.0.0)",
 ]
 
 

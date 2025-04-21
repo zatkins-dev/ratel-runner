@@ -2,11 +2,12 @@ from pathlib import Path
 import importlib.resources
 import typer
 from typing import Optional, Annotated
-from ..sweep import load_sweep_specification
+import pandas as pd
 
 from .press_common import get_mesh, DIE_HEIGHT
 from ..experiment import ExperimentConfig
 from ..flux import flux, machines
+from ..sweep import load_sweep_specification
 from .. import local
 from .. import config
 
@@ -194,6 +195,53 @@ def flux_sweep(
         scratch_dir=scratch_dir,
         parameters=sweep_params,
         sweep_name=sweep_spec.stem,
+        yes=yes,
+        dry_run=dry_run
+    )
+
+@app.command(
+    context_settings={"allow_extra_args": True, "ignore_unknown_options": True}
+)
+def flux_uq(
+    ctx: typer.Context,
+    uq_spec: Path,
+    voxel_data: Path,
+    characteristic_length: Annotated[float, typer.Argument(min=0, max=DIE_HEIGHT / 4)],
+    load_fraction: Annotated[float, typer.Argument(min=0.0, max=1.0)] = 0.4,
+    clamp_top: bool = True,
+    num_processes: Annotated[int, typer.Option("-n", min=1)] = 1,
+    max_time: Annotated[str, typer.Option("-t")] = None,
+    log_view: bool = False,
+    machine: Optional[machines.Machine] = None,
+    ratel_dir: Path = None,
+    output_dir: Path = None,
+    scratch_dir: Path = None,
+    yes: Annotated[bool, typer.Option('-y')] = False,
+    dry_run: bool = False,
+):
+    """Run a parameter sweep using the Flux job scheduler."""
+    if scratch_dir is None:
+        scratch_dir = Path(config.get_fallback('SCRATCH_DIR')).resolve()
+    experiment = PressNoAirExperiment(
+        voxel_data,
+        characteristic_length,
+        load_fraction=load_fraction,
+        clamp_top=clamp_top,
+        scratch_dir=scratch_dir
+    )
+    uq_params = pd.read_csv(uq_spec).to_dict(orient='list')
+    experiment.user_options = ctx.args
+    experiment.logview = log_view
+    flux.uq(
+        experiment,
+        machine=machine,
+        num_processes=num_processes,
+        max_time=max_time,
+        output_dir=output_dir,
+        ratel_dir=ratel_dir,
+        scratch_dir=scratch_dir,
+        parameters=uq_params,
+        sweep_name=uq_spec.stem,
         yes=yes,
         dry_run=dry_run
     )

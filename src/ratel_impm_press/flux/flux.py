@@ -265,3 +265,116 @@ def sweep(
         run(script_path)
 
     print(f"[success]All jobs submitted![/]")
+
+
+def uq(
+    experiment: ExperimentConfig,
+    machine: Machine | None,
+    num_processes: int,
+    max_time: str = None,
+    output_dir: Path = None,
+    ratel_dir: Path = None,
+    scratch_dir: Path = None,
+    parameters: dict = {},
+    sweep_name: str = 'uq',
+    yes: bool = False,
+    dry_run: bool = False,
+):
+    """Generate flux scripts for a UQ study."""
+    options = experiment.user_options.copy()
+    num_runs = len(parameters.values()[0])
+
+    if ratel_dir is None:
+        ratel_dir = Path(config.get_fallback('RATEL_DIR'))
+    if scratch_dir is None:
+        scratch_dir = Path(config.get_fallback('SCRATCH_DIR'))
+    if output_dir is None:
+        output_dir = Path(config.get_fallback('OUTPUT_DIR', Path.cwd() / 'output'))
+    if machine is None:
+        machine = detect_machine()
+        if machine is None:
+            raise ValueError("Could not detect machine. Please specify a machine.")
+
+    if not output_dir.exists():
+        output_dir.mkdir(parents=True)
+
+    sweep_name = experiment.name + f'-{sweep_name}-' + '-'.join(parameters.keys())
+    sweep_script_dir = (scratch_dir / 'flux_scripts' / sweep_name).resolve()
+    sweep_output_dir = (output_dir / sweep_name).resolve()
+
+    print(f'{experiment}')
+    print("")
+    print(f'[h2]Parameter Sweep[/]')
+    print(f"  • Sweeping {len(parameters)} parameters:")
+    for name, values in parameters.items():
+        print(f"    • {name}: {', '.join(map(str, values))}")
+    print(f"  • Total number of runs: {num_runs}")
+    print(f"  • Number of processes per run: {num_processes}")
+    print(f"  • Number of nodes per run: {int(ceil(num_processes / get_machine_config(machine).gpus_per_node))}")
+    print(f"  • Output directory: {sweep_output_dir}")
+    print(f"  • Script directory: {sweep_script_dir}")
+
+    if sweep_script_dir.exists() and not yes:
+        yn = console.input(f"[warning]Directory {sweep_script_dir} already exists. Remove?[/] (y/n) ")
+        if yn.lower() != 'y':
+            raise FileExistsError(f"Directory {sweep_script_dir} already exists.")
+    if sweep_script_dir.exists():
+        shutil.rmtree(sweep_script_dir)
+    sweep_script_dir.mkdir(parents=True, exist_ok=True)
+
+    if sweep_output_dir.exists() and not yes:
+        yn = console.input(f"[warning]Directory {sweep_output_dir} already exists. Remove?[/] (y/n) ")
+        if yn.lower() != 'y':
+            raise FileExistsError(f"Directory {sweep_output_dir} already exists.")
+    if sweep_output_dir.exists():
+        shutil.rmtree(sweep_output_dir)
+    sweep_output_dir.mkdir(parents=True, exist_ok=True)
+
+    scripts = []
+    for params in zip(*parameters.values()):
+        param_dict = dict(zip(parameters.keys(), params))
+        param_dict_str = dict(zip(parameters.keys(), map(str, params)))
+        new_options = options.copy()
+        new_options.update(param_dict_str)
+        experiment.user_options = new_options
+
+        print(f"[info]Generating script for parameters:")
+        for name, val in param_dict.items():
+            print(f"[info]    • {name}: {val}")
+
+        link_name = '---'.join([f"{key}-{value}" for key, value in param_dict_str.items()])
+
+        # Capture output to avoid cluttering console
+        console.begin_capture()
+        script_path, options_path = generate(
+            experiment,
+            machine=machine,
+            num_processes=num_processes,
+            max_time=max_time,
+            output_dir=sweep_output_dir,
+            ratel_dir=ratel_dir,
+            scratch_dir=scratch_dir,
+            link_name=link_name,
+        )
+        console.end_capture()
+        shutil.copy(script_path, sweep_script_dir / script_path.name)
+        script_path.unlink()
+        script_path = sweep_script_dir / script_path.name
+
+        # Copy options file for ease of access
+        shutil.copy(options_path, sweep_output_dir / options_path.name)
+
+        scripts.append(script_path)
+        print(f"[info]  Script written to: {script_path}[/]")
+        print(f"[info]  Output directory:  {sweep_output_dir/link_name}[/]")
+
+    print(f"[info]All scripts written to: {sweep_script_dir}[/]")
+    print("")
+    if dry_run:
+        print(f"[info]Dry run mode: not submitting jobs.[/]")
+        return
+    print(f"[h2]Submitting jobs...[/]")
+    for script_path in scripts:
+        run(script_path)
+
+    print(f"[success]All jobs submitted![/]")

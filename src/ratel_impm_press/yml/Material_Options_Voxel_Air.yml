@@ -9,7 +9,7 @@ mpm:
   material: grains,binder,void
   void:
     model: elasticity-mpm-neo-hookean-damage-current
-    E: 0.1
+    E: 0.5
     nu: 0.0
     fracture_toughness: 1e6
     damage_scaling: 1
@@ -21,7 +21,7 @@ mpm:
       value: 0
   binder:
     model: elasticity-mpm-neo-hookean-damage-current
-    E: 4.9e4 # MPa # 4.9e7 kPa (shear modulus 2e7 kPa, poisson ratio 0.225)
+    E: 500 # MPa
     nu: 0.25
     fracture_toughness: 7.4e3 # MPa mm # 0.74 MPa um
     damage_scaling: 1
@@ -32,7 +32,7 @@ mpm:
       value: 1
   grains:
     model: elasticity-mpm-neo-hookean-damage-current
-    E: 3.0e4 # MPa # 3.0e7 kPa
+    E: 7500 # MPa
     nu: 0.25
     fracture_toughness: 1.830e4 # MPa mm
     damage_scaling: 1
