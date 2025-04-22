@@ -282,7 +282,7 @@ def uq(
 ):
     """Generate flux scripts for a UQ study."""
     options = experiment.user_options.copy()
-    num_runs = len(parameters.values()[0])
+    num_runs = len(list(parameters.values())[0])
 
     if ratel_dir is None:
         ratel_dir = Path(config.get_fallback('RATEL_DIR'))
