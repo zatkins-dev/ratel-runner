@@ -19,7 +19,7 @@ _solver_config_file = importlib.resources.files('ratel_impm_press') / 'yml' / 'R
 
 class PressStickyAirExperiment(ExperimentConfig):
     def __init__(self, voxel_data: Path, characteristic_length: float,
-                 load_fraction: float = 0.4, clamp_top: bool = True, scratch_dir: Path = None):
+                 load_fraction: float = 0.4, clamp_top: bool = True):
         if not voxel_data.exists():
             raise FileNotFoundError(f"Voxel data {voxel_data} does not exist")
         if characteristic_length <= 0:
@@ -33,7 +33,7 @@ class PressStickyAirExperiment(ExperimentConfig):
         self.characteristic_length: float = characteristic_length
         self.load_fraction: float = load_fraction
         self.clamp_top: bool = clamp_top
-        self.scratch_dir: Path = scratch_dir or Path(config.get_fallback('SCRATCH_DIR')).resolve()
+        self.scratch_dir: Path = Path(config.get_fallback('SCRATCH_DIR')).resolve()
         base_config = _solver_config_file.read_text() + '\n' + _material_config_file.read_text()
         base_name = Path(__file__).stem.replace('_', '-')
         name = f"{base_name}-CL{characteristic_length}-LF{load_fraction}{'-clamped' if clamp_top else ''}"
@@ -84,28 +84,21 @@ def run(
     load_fraction: Annotated[float, typer.Argument(min=0.0, max=1.0)] = 0.4,
     clamp_top: bool = True,
     num_processes: Annotated[int, typer.Option("-n", min=1)] = 1,
-    ratel_dir: Path = None,
     out: Path = None,
-    scratch_dir: Path = None,
     dry_run: bool = False
 ):
     """Run the experiment in the current shell (blocking)"""
-    if scratch_dir is None:
-        scratch_dir = Path(config.get_fallback('SCRATCH_DIR')).resolve()
     experiment = PressStickyAirExperiment(
         voxel_data,
         characteristic_length,
         load_fraction=load_fraction,
         clamp_top=clamp_top,
-        scratch_dir=scratch_dir
     )
     experiment.user_options = ctx.args
     local.run(
         experiment,
         num_processes=num_processes,
-        ratel_dir=ratel_dir,
         out=out,
-        scratch_dir=scratch_dir,
         dry_run=dry_run
     )
 
@@ -120,23 +113,17 @@ def flux_run(
     load_fraction: Annotated[float, typer.Argument(min=0.0, max=1.0)] = 0.4,
     clamp_top: bool = True,
     num_processes: Annotated[int, typer.Option("-n", min=1)] = 1,
-    max_time: str = None,
+    max_time: Annotated[str, typer.Option("-t")] = None,
     log_view: bool = False,
     machine: Optional[machines.Machine] = None,
-    ratel_dir: Path = None,
-    output_dir: Path = None,
-    scratch_dir: Path = None,
     dry_run: bool = False
 ):
     """Run the experiment using the Flux job scheduler"""
-    if scratch_dir is None:
-        scratch_dir = Path(config.get_fallback('SCRATCH_DIR')).resolve()
     experiment = PressStickyAirExperiment(
         voxel_data,
         characteristic_length,
         load_fraction=load_fraction,
         clamp_top=clamp_top,
-        scratch_dir=scratch_dir
     )
     experiment.user_options = ctx.args
     experiment.logview = log_view
@@ -145,9 +132,6 @@ def flux_run(
         machine=machine,
         num_processes=num_processes,
         max_time=max_time,
-        output_dir=output_dir,
-        ratel_dir=ratel_dir,
-        scratch_dir=scratch_dir
     )
     if not dry_run:
         flux.run(script_file)
@@ -167,21 +151,15 @@ def flux_sweep(
     max_time: Annotated[str, typer.Option("-t")] = None,
     log_view: bool = False,
     machine: Optional[machines.Machine] = None,
-    ratel_dir: Path = None,
-    output_dir: Path = None,
-    scratch_dir: Path = None,
     yes: Annotated[bool, typer.Option('-y')] = False,
     dry_run: bool = False,
 ):
     """Run a parameter sweep using the Flux job scheduler."""
-    if scratch_dir is None:
-        scratch_dir = Path(config.get_fallback('SCRATCH_DIR')).resolve()
     experiment = PressStickyAirExperiment(
         voxel_data,
         characteristic_length,
         load_fraction=load_fraction,
         clamp_top=clamp_top,
-        scratch_dir=scratch_dir
     )
     sweep_params = load_sweep_specification(ctx, sweep_spec, quiet=True)
     experiment.user_options = ctx.args
@@ -191,14 +169,12 @@ def flux_sweep(
         machine=machine,
         num_processes=num_processes,
         max_time=max_time,
-        output_dir=output_dir,
-        ratel_dir=ratel_dir,
-        scratch_dir=scratch_dir,
         parameters=sweep_params,
         sweep_name=sweep_spec.stem,
         yes=yes,
         dry_run=dry_run
     )
+
 
 @app.command(
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True}
@@ -214,21 +190,15 @@ def flux_uq(
     max_time: Annotated[str, typer.Option("-t")] = None,
     log_view: bool = False,
     machine: Optional[machines.Machine] = None,
-    ratel_dir: Path = None,
-    output_dir: Path = None,
-    scratch_dir: Path = None,
     yes: Annotated[bool, typer.Option('-y')] = False,
     dry_run: bool = False,
 ):
     """Run a parameter sweep using the Flux job scheduler."""
-    if scratch_dir is None:
-        scratch_dir = Path(config.get_fallback('SCRATCH_DIR')).resolve()
     experiment = PressStickyAirExperiment(
         voxel_data,
         characteristic_length,
         load_fraction=load_fraction,
         clamp_top=clamp_top,
-        scratch_dir=scratch_dir
     )
     uq_params = pd.read_csv(uq_spec).to_dict(orient='list')
     experiment.user_options = ctx.args
@@ -238,9 +208,6 @@ def flux_uq(
         machine=machine,
         num_processes=num_processes,
         max_time=max_time,
-        output_dir=output_dir,
-        ratel_dir=ratel_dir,
-        scratch_dir=scratch_dir,
         parameters=uq_params,
         sweep_name=uq_spec.stem,
         yes=yes,

@@ -23,6 +23,7 @@ class Machine(Enum):
 
 def get_machine_config(machine: Machine) -> MachineConfig:
     """Get the configuration for the specified machine."""
+    machine = Machine(machine)
     if machine == Machine.TUOLUMNE:
         tuo_packages = [
             'rocmcc/6.3.1hangfix-cce-19.0.0a-magic',

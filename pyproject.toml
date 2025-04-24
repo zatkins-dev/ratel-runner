@@ -1,7 +1,7 @@
 [project]
 name = "ratel-impm-press"
-version = "0.1.13.1"
-description = "Press Experiment Scripts for Ratel Implicit Material Point Method"
+version = "0.1.14"
+description = "Experiment Scripts for Ratel Implicit Material Point Method"
 authors = [
     {name = "Zach Atkins",email = "zach.atkins@colorado.edu"}
 ]
@@ -25,4 +25,4 @@ packages = [{include = "ratel_impm_press", from = "src"}]
 
 
 [tool.poetry.scripts]
-ratel-impm-press = "ratel_impm_press.main:app"
+ratel-impm = "ratel_impm_press.main:app"

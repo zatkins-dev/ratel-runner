@@ -6,11 +6,13 @@ from pathlib import Path
 from typing import Annotated
 import typer
 
+__doc__ = "Load and write sweep specifications for Ratel iMPM experiments"
+__all__ = ['load_sweep_specification', 'write_sweep_specification']
 
 console = rich.get_console()
 print = console.print
 
-app = typer.Typer()
+app = typer.Typer(help=__doc__)
 
 # https://stackoverflow.com/a/4703508
 numeric_pattern = r'[-+]?(?:(?:\d*\.\d+)|(?:\d+\.?))(?:[Ee][+-]?\d+)?'

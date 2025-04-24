@@ -20,19 +20,14 @@ def generate(
     machine: Machine | None,
     num_processes: int,
     max_time: str = None,
-    output_dir: Path = None,
-    ratel_dir: Path = None,
-    scratch_dir: Path = None,
     link_name: str = None,
+    output_dir: Path = None,
     additional_args: str = ""
 ) -> tuple[Path, Path]:
     """Generate a flux script to run the experiments."""
-    if ratel_dir is None:
-        ratel_dir = Path(config.get_fallback('RATEL_DIR'))
-    if scratch_dir is None:
-        scratch_dir = Path(config.get_fallback('SCRATCH_DIR'))
-    if output_dir is None:
-        output_dir = Path(config.get_fallback('OUTPUT_DIR', Path.cwd() / 'output'))
+    ratel_dir = Path(config.get_fallback('RATEL_DIR'))
+    scratch_dir = Path(config.get_fallback('SCRATCH_DIR'))
+    output_dir = output_dir or Path(config.get_fallback('OUTPUT_DIR', Path.cwd() / 'output'))
     if machine is None:
         machine = detect_machine()
         if machine is None:
@@ -159,9 +154,6 @@ def sweep(
     machine: Machine | None,
     num_processes: int,
     max_time: str = None,
-    output_dir: Path = None,
-    ratel_dir: Path = None,
-    scratch_dir: Path = None,
     parameters: dict = {},
     sweep_name: str = 'sweep',
     yes: bool = False,
@@ -170,13 +162,10 @@ def sweep(
     """Generate flux scripts for a parameter sweep."""
     options = experiment.user_options.copy()
     num_runs = prod(map(len, parameters.values()))
+    ratel_dir = Path(config.get_fallback('RATEL_DIR'))
+    scratch_dir = Path(config.get_fallback('SCRATCH_DIR'))
+    output_dir = Path(config.get_fallback('OUTPUT_DIR', Path.cwd() / 'output'))
 
-    if ratel_dir is None:
-        ratel_dir = Path(config.get_fallback('RATEL_DIR'))
-    if scratch_dir is None:
-        scratch_dir = Path(config.get_fallback('SCRATCH_DIR'))
-    if output_dir is None:
-        output_dir = Path(config.get_fallback('OUTPUT_DIR', Path.cwd() / 'output'))
     if machine is None:
         machine = detect_machine()
         if machine is None:
@@ -186,8 +175,9 @@ def sweep(
         output_dir.mkdir(parents=True)
 
     sweep_name = experiment.name + f'-{sweep_name}-' + '-'.join(parameters.keys())
-    sweep_script_dir = (scratch_dir / 'flux_scripts' / sweep_name).resolve()
     sweep_output_dir = (output_dir / sweep_name).resolve()
+    sweep_script_dir = (sweep_output_dir / 'flux_scripts').resolve()
+    sweep_options_dir = (sweep_output_dir / 'options').resolve()
 
     print(f'{experiment}')
     print("")
@@ -201,14 +191,6 @@ def sweep(
     print(f"  • Output directory: {sweep_output_dir}")
     print(f"  • Script directory: {sweep_script_dir}")
 
-    if sweep_script_dir.exists() and not yes:
-        yn = console.input(f"[warning]Directory {sweep_script_dir} already exists. Remove?[/] (y/n) ")
-        if yn.lower() != 'y':
-            raise FileExistsError(f"Directory {sweep_script_dir} already exists.")
-    if sweep_script_dir.exists():
-        shutil.rmtree(sweep_script_dir)
-    sweep_script_dir.mkdir(parents=True, exist_ok=True)
-
     if sweep_output_dir.exists() and not yes:
         yn = console.input(f"[warning]Directory {sweep_output_dir} already exists. Remove?[/] (y/n) ")
         if yn.lower() != 'y':
@@ -216,6 +198,8 @@ def sweep(
     if sweep_output_dir.exists():
         shutil.rmtree(sweep_output_dir)
     sweep_output_dir.mkdir(parents=True, exist_ok=True)
+    sweep_script_dir.mkdir()
+    sweep_options_dir.mkdir()
 
     scripts = []
     for params in product(*parameters.values()):
@@ -239,8 +223,6 @@ def sweep(
             num_processes=num_processes,
             max_time=max_time,
             output_dir=sweep_output_dir,
-            ratel_dir=ratel_dir,
-            scratch_dir=scratch_dir,
             link_name=link_name,
         )
         console.end_capture()
@@ -248,8 +230,8 @@ def sweep(
         script_path.unlink()
         script_path = sweep_script_dir / script_path.name
 
-        # Copy options file for ease of access
-        shutil.copy(options_path, sweep_output_dir / options_path.name)
+        # Link options file for ease of access
+        (sweep_options_dir / options_path.name).symlink_to(options_path)
 
         scripts.append(script_path)
         print(f"[info]  Script written to: {script_path}[/]")
@@ -272,9 +254,6 @@ def uq(
     machine: Machine | None,
     num_processes: int,
     max_time: str = None,
-    output_dir: Path = None,
-    ratel_dir: Path = None,
-    scratch_dir: Path = None,
     parameters: dict = {},
     sweep_name: str = 'uq',
     yes: bool = False,
@@ -283,13 +262,8 @@ def uq(
     """Generate flux scripts for a UQ study."""
     options = experiment.user_options.copy()
     num_runs = len(list(parameters.values())[0])
-
-    if ratel_dir is None:
-        ratel_dir = Path(config.get_fallback('RATEL_DIR'))
-    if scratch_dir is None:
-        scratch_dir = Path(config.get_fallback('SCRATCH_DIR'))
-    if output_dir is None:
-        output_dir = Path(config.get_fallback('OUTPUT_DIR', Path.cwd() / 'output'))
+    scratch_dir = Path(config.get_fallback('SCRATCH_DIR'))
+    output_dir = Path(config.get_fallback('OUTPUT_DIR', Path.cwd() / 'output'))
     if machine is None:
         machine = detect_machine()
         if machine is None:
@@ -299,8 +273,9 @@ def uq(
         output_dir.mkdir(parents=True)
 
     sweep_name = experiment.name + f'-{sweep_name}-' + '-'.join(parameters.keys())
-    sweep_script_dir = (scratch_dir / 'flux_scripts' / sweep_name).resolve()
     sweep_output_dir = (output_dir / sweep_name).resolve()
+    sweep_script_dir = (sweep_output_dir / 'flux_scripts').resolve()
+    sweep_options_dir = (sweep_output_dir / 'options').resolve()
 
     print(f'{experiment}')
     print("")
@@ -314,14 +289,6 @@ def uq(
     print(f"  • Output directory: {sweep_output_dir}")
     print(f"  • Script directory: {sweep_script_dir}")
 
-    if sweep_script_dir.exists() and not yes:
-        yn = console.input(f"[warning]Directory {sweep_script_dir} already exists. Remove?[/] (y/n) ")
-        if yn.lower() != 'y':
-            raise FileExistsError(f"Directory {sweep_script_dir} already exists.")
-    if sweep_script_dir.exists():
-        shutil.rmtree(sweep_script_dir)
-    sweep_script_dir.mkdir(parents=True, exist_ok=True)
-
     if sweep_output_dir.exists() and not yes:
         yn = console.input(f"[warning]Directory {sweep_output_dir} already exists. Remove?[/] (y/n) ")
         if yn.lower() != 'y':
@@ -329,6 +296,8 @@ def uq(
     if sweep_output_dir.exists():
         shutil.rmtree(sweep_output_dir)
     sweep_output_dir.mkdir(parents=True, exist_ok=True)
+    sweep_script_dir.mkdir()
+    sweep_options_dir.mkdir()
 
     scripts = []
     for params in zip(*parameters.values()):
@@ -352,8 +321,6 @@ def uq(
             num_processes=num_processes,
             max_time=max_time,
             output_dir=sweep_output_dir,
-            ratel_dir=ratel_dir,
-            scratch_dir=scratch_dir,
             link_name=link_name,
         )
         console.end_capture()
@@ -361,8 +328,8 @@ def uq(
         script_path.unlink()
         script_path = sweep_script_dir / script_path.name
 
-        # Copy options file for ease of access
-        shutil.copy(options_path, sweep_output_dir / options_path.name)
+        # Link options file for ease of access
+        (sweep_options_dir / options_path.name).symlink_to(options_path)
 
         scripts.append(script_path)
         print(f"[info]  Script written to: {script_path}[/]")
