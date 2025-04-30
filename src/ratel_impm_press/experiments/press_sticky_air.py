@@ -5,7 +5,7 @@ from typing import Optional, Annotated
 import pandas as pd
 
 from .press_common import get_mesh, DIE_HEIGHT, set_diagnostic_options
-from ..experiment import ExperimentConfig
+from ..experiment import ExperimentConfig, LogViewType
 from ..flux import flux, machines
 from ..sweep import load_sweep_specification
 from .. import local
@@ -131,8 +131,8 @@ def flux_run(
     load_fraction: Annotated[float, typer.Argument(min=0.0, max=1.0)] = 0.4,
     clamp_top: bool = True,
     num_processes: Annotated[int, typer.Option("-n", min=1)] = 1,
-    max_time: Annotated[str, typer.Option("-t")] = None,
-    log_view: bool = False,
+    max_time: Annotated[str, typer.Option("-t", "--max-time")] = None,
+    log_view: Optional[LogViewType] = None,
     machine: Optional[machines.Machine] = None,
     save_forces: Annotated[int, typer.Option(help="Interval to save surface forces, or zero to disable", min=0)] = 1,
     save_strain_energy: Annotated[int, typer.Option(
@@ -188,8 +188,8 @@ def flux_sweep(
     load_fraction: Annotated[float, typer.Argument(min=0.0, max=1.0)] = 0.4,
     clamp_top: bool = True,
     num_processes: Annotated[int, typer.Option("-n", min=1)] = 1,
-    max_time: Annotated[str, typer.Option("-t")] = None,
-    log_view: bool = False,
+    max_time: Annotated[str, typer.Option("-t", "--max-time")] = None,
+    log_view: Optional[LogViewType] = None,
     machine: Optional[machines.Machine] = None,
     save_forces: Annotated[int, typer.Option(help="Interval to save surface forces, or zero to disable", min=0)] = 1,
     save_strain_energy: Annotated[int, typer.Option(
@@ -246,8 +246,8 @@ def flux_uq(
     load_fraction: Annotated[float, typer.Argument(min=0.0, max=1.0)] = 0.4,
     clamp_top: bool = True,
     num_processes: Annotated[int, typer.Option("-n", min=1)] = 1,
-    max_time: Annotated[str, typer.Option("-t")] = None,
-    log_view: bool = False,
+    max_time: Annotated[str, typer.Option("-t", "--max-time")] = None,
+    log_view: Optional[LogViewType] = None,
     machine: Optional[machines.Machine] = None,
     save_forces: Annotated[int, typer.Option(help="Interval to save surface forces, or zero to disable", min=0)] = 1,
     save_strain_energy: Annotated[int, typer.Option(

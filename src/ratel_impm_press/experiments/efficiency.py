@@ -1,4 +1,4 @@
-from ..experiment import ExperimentConfig
+from ..experiment import ExperimentConfig, LogViewType
 from pathlib import Path
 import typer
 from typing import Annotated, Optional
@@ -131,7 +131,7 @@ def flux_run(
     points_per_cell: Annotated[int, typer.Argument(min=8)] = 27,
     num_processes: Annotated[int, typer.Option("-n", min=1)] = 1,
     max_time: Annotated[str, typer.Option('-t')] = '1h',
-    log_view: bool = False,
+    log_view: Optional[LogViewType] = None,
     machine: Optional[machines.Machine] = None,
     dry_run: bool = False
 ):

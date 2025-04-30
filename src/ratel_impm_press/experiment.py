@@ -1,18 +1,38 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
+from enum import Enum
+from typing import Optional
+
+
+class LogViewType(Enum):
+    FLAMEGRAPH = "flamegraph"
+    XML = "xml"
+    DETAIL = "detail"
+    TEXT = "text"
+
+    def to_petsc(self) -> str:
+        match self:
+            case self.FLAMEGRAPH:
+                return ".txt:ascii_flamegraph"
+            case self.XML:
+                return ".xml:ascii_xml"
+            case self.DETAIL:
+                return ".py:ascii_info_detail"
+            case self.TEXT:
+                return ""
 
 
 class ExperimentConfig(ABC):
     _name: str
     _description: str
     _base_config: str
-    _logview: bool
+    _logview: Optional[LogViewType]
 
     def __init__(self, name: str, description: str, base_config: str):
         self._name = name
         self._description = description
         self._base_config = base_config
-        self._logview = False
+        self._logview = None
         self._user_options = dict()
         self.diagnostic_options = dict()
 
@@ -34,12 +54,12 @@ class ExperimentConfig(ABC):
         raise NotImplementedError
 
     @property
-    def logview(self) -> bool:
+    def logview(self) -> LogViewType | None:
         return self._logview
 
     @logview.setter
-    def logview(self, value: bool):
-        self._logview = value
+    def logview(self, value: Optional[LogViewType]):
+        self._logview = LogViewType(value) if value is not None else None
 
     def parse_user_args(self, args) -> dict:
         options = {}
@@ -87,8 +107,8 @@ class ExperimentConfig(ABC):
     def config(self) -> str:
         config = self.base_config + self.mesh_options + self.diagnostic_config + self.user_config
         if self.logview:
-            config += '\n'.join([
-                'log_view: :log_view.txt',
+            config += '\n' + '\n'.join([
+                f'log_view: :log_view{self.logview.to_petsc()}',
                 'log_view_memory:',
                 'log_view_gpu_time:',
             ])
