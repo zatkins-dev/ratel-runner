@@ -28,15 +28,7 @@ ts:
       max: 1e-3
   view:
   monitor:
-  monitor_surface_force_per_face: ascii:forces.csv
-  monitor_strain_energy: ascii:strain_energy.csv
-  monitor_diagnostic_quantities: cgns:diagnostic_%06d.cgns
-  monitor_diagnostic_quantities_interval: 200
-  monitor_solution: cgns:solution_%06d.cgns
-  monitor_solution_interval: 200
-  monitor_swarm_solution: ascii:swarm.xmf
-  monitor_swarm_solution_interval: 200
-  monitor_swarm_fields: J,volume,rho,material
+
 
 viewer_cgns_batch_size: 1
 

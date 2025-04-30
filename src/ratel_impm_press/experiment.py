@@ -1,4 +1,4 @@
-from abc import ABC
+from abc import ABC, abstractmethod
 from pathlib import Path
 
 
@@ -13,7 +13,8 @@ class ExperimentConfig(ABC):
         self._description = description
         self._base_config = base_config
         self._logview = False
-        self._material_options = dict()
+        self._user_options = dict()
+        self.diagnostic_options = dict()
 
     @property
     def name(self) -> str:
@@ -28,6 +29,7 @@ class ExperimentConfig(ABC):
         return self._base_config
 
     @property
+    @abstractmethod
     def mesh_options(self) -> str:
         raise NotImplementedError
 
@@ -55,32 +57,40 @@ class ExperimentConfig(ABC):
         return options
 
     @property
+    def diagnostic_config(self):
+        return '\n# Diagnostic output options\n' + '\n'.join([
+            f"{key}: {value}"
+            for key, value in self.diagnostic_options.items()
+        ])
+
+    @property
     def user_config(self) -> str:
         return '\n# User-provided options\n' + '\n'.join([
             f"{key}: {value}"
-            for key, value in self._material_options.items()
+            for key, value in self._user_options.items()
         ])
 
     @property
     def user_options(self) -> dict:
-        return self._material_options
+        return self._user_options
 
     @user_options.setter
     def user_options(self, options: dict | list):
         if isinstance(options, list):
-            self._material_options = self.parse_user_args(options)
+            self._user_options = self.parse_user_args(options)
         elif isinstance(options, dict):
-            self._material_options = options
+            self._user_options = options
         else:
             raise TypeError("user_options must be a list or a dict")
 
     @property
     def config(self) -> str:
-        config = self.base_config + self.mesh_options + self.user_config
+        config = self.base_config + self.mesh_options + self.diagnostic_config + self.user_config
         if self.logview:
             config += '\n'.join([
                 'log_view: :log_view.txt',
                 'log_view_memory:',
+                'log_view_gpu_time:',
             ])
         return config
 

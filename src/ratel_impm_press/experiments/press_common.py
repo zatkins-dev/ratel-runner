@@ -6,7 +6,7 @@ from math import ceil
 from multiprocessing import cpu_count
 
 from .. import config
-
+from ..experiment import ExperimentConfig
 
 console = rich.get_console()
 print = console.print
@@ -16,6 +16,38 @@ DIE_PIXEL_SIZE = 8.434786e-3  # mm/pixel # 8.434786 um/pixel
 DIE_RADIUS = 2.550608716  # mm # 2550.608716 um, 5_000 / (8.434786 * 2) + 6 pixels
 DIE_HEIGHT = 8.51913386  # mm # 8519.13386 um, 1010 pixels
 DIE_CENTER = [2.65695759, 2.65695759, 0]  # [2656.95759, 2656.95759, 0] um, 315, 315, 0 pixels
+
+
+def set_diagnostic_options(experiment: ExperimentConfig, save_forces: int, save_strain_energy: int, save_swarm: int, save_solution: int,
+                           save_diagnostics: int, save: bool) -> dict:
+    """
+    Set diagnostic options for the experiment.
+
+    :param experiment: The experiment configuration object.
+    :param save_forces: Whether to save forces.
+    :param save_swarm: Whether to save swarm data.
+    :param save_solution: Whether to save solution data.
+    :param save_diagnostics: Whether to save diagnostics.
+    :param save_all: Whether to save all data.
+    """
+    if not save:
+        return
+    if save_forces > 0:
+        experiment.diagnostic_options["ts_monitor_surface_force_per_face"] = "ascii:forces.csv"
+        experiment.diagnostic_options["ts_monitor_surface_force_per_face_interval"] = f"{save_forces}"
+    if save_strain_energy > 0:
+        experiment.diagnostic_options["ts_monitor_strain_energy"] = "ascii:strain_energy.csv"
+        experiment.diagnostic_options["ts_monitor_strain_energy_interval"] = f"{save_strain_energy}"
+    if save_swarm > 0:
+        experiment.diagnostic_options["ts_monitor_swarm_solution"] = "ascii:swarm.xmf"
+        experiment.diagnostic_options["ts_monitor_swarm_fields"] = "J,volume,rho,material"
+        experiment.diagnostic_options["ts_monitor_swarm_solution_interval"] = f"{save_swarm}"
+    if save_solution > 0:
+        experiment.diagnostic_options["ts_monitor_solution"] = r"cgns:solution_%06d.cgns"
+        experiment.diagnostic_options["ts_monitor_solution_interval"] = f"{save_solution}"
+    if save_diagnostics > 0:
+        experiment.diagnostic_options["ts_monitor_diagnostic_quantities"] = r"cgns:diagnostic_%06d.cgns"
+        experiment.diagnostic_options["ts_monitor_diagnostic_quantities_interval"] = f"{save_diagnostics}"
 
 
 def get_mesh(characteristic_length: float, voxel_data: Path,

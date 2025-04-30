@@ -4,7 +4,7 @@ import typer
 from typing import Optional, Annotated
 import pandas as pd
 
-from .press_common import get_mesh, DIE_HEIGHT
+from .press_common import get_mesh, DIE_HEIGHT, set_diagnostic_options
 from ..experiment import ExperimentConfig
 from ..flux import flux, machines
 from ..sweep import load_sweep_specification
@@ -28,7 +28,6 @@ class PressStickyAirExperiment(ExperimentConfig):
             raise ValueError(f"characteristic_length is extremely large, maybe you meant {characteristic_length:f}e-3?")
         if load_fraction <= 0.0 or load_fraction > 1.0:
             raise ValueError(f"load_fraction must be in (0.0, 1.0], got {load_fraction}")
-        self._options: str | None = None
         self.voxel_data: Path = voxel_data
         self.characteristic_length: float = characteristic_length
         self.load_fraction: float = load_fraction
@@ -84,6 +83,16 @@ def run(
     load_fraction: Annotated[float, typer.Argument(min=0.0, max=1.0)] = 0.4,
     clamp_top: bool = True,
     num_processes: Annotated[int, typer.Option("-n", min=1)] = 1,
+    save_forces: Annotated[int, typer.Option(help="Interval to save surface forces, or zero to disable", min=0)] = 1,
+    save_strain_energy: Annotated[int, typer.Option(
+        help="Interval to save strain energy, or zero to disable", min=0)] = 1,
+    save_swarm: Annotated[int, typer.Option(help="Interval to save swarm data, or zero to disable", min=0)] = 200,
+    save_solution: Annotated[int, typer.Option(
+        help="Interval to save projected solution, or zero to disable", min=0)] = 200,
+    save_diagnostics: Annotated[int, typer.Option(
+        help="Interval to save projected diagnostic quantities, or zero to disable", min=0)] = 200,
+    save: Annotated[bool, typer.Option(
+        help="Global flag to enable or disable writing diagnostics. If False, nothing will be written.")] = True,
     out: Path = None,
     dry_run: bool = False
 ):
@@ -95,6 +104,15 @@ def run(
         clamp_top=clamp_top,
     )
     experiment.user_options = ctx.args
+    set_diagnostic_options(
+        experiment,
+        save_forces=save_forces,
+        save_strain_energy=save_strain_energy,
+        save_swarm=save_swarm,
+        save_solution=save_solution,
+        save_diagnostics=save_diagnostics,
+        save=save
+    )
     local.run(
         experiment,
         num_processes=num_processes,
@@ -116,6 +134,16 @@ def flux_run(
     max_time: Annotated[str, typer.Option("-t")] = None,
     log_view: bool = False,
     machine: Optional[machines.Machine] = None,
+    save_forces: Annotated[int, typer.Option(help="Interval to save surface forces, or zero to disable", min=0)] = 1,
+    save_strain_energy: Annotated[int, typer.Option(
+        help="Interval to save strain energy, or zero to disable", min=0)] = 1,
+    save_swarm: Annotated[int, typer.Option(help="Interval to save swarm data, or zero to disable", min=0)] = 200,
+    save_solution: Annotated[int, typer.Option(
+        help="Interval to save projected solution, or zero to disable", min=0)] = 200,
+    save_diagnostics: Annotated[int, typer.Option(
+        help="Interval to save projected diagnostic quantities, or zero to disable", min=0)] = 200,
+    save: Annotated[bool, typer.Option(
+        help="Global flag to enable or disable writing diagnostics. If False, nothing will be written.")] = True,
     dry_run: bool = False
 ):
     """Run the experiment using the Flux job scheduler"""
@@ -127,13 +155,25 @@ def flux_run(
     )
     experiment.user_options = ctx.args
     experiment.logview = log_view
+    set_diagnostic_options(
+        experiment,
+        save_forces=save_forces,
+        save_strain_energy=save_strain_energy,
+        save_swarm=save_swarm,
+        save_solution=save_solution,
+        save_diagnostics=save_diagnostics,
+        save=save
+    )
     script_file, _ = flux.generate(
         experiment,
         machine=machine,
         num_processes=num_processes,
         max_time=max_time,
     )
-    if not dry_run:
+    if dry_run:
+        print(f"Generated script saved to", script_file)
+        print("Dry run, exiting.")
+    else:
         flux.run(script_file)
 
 
@@ -151,6 +191,16 @@ def flux_sweep(
     max_time: Annotated[str, typer.Option("-t")] = None,
     log_view: bool = False,
     machine: Optional[machines.Machine] = None,
+    save_forces: Annotated[int, typer.Option(help="Interval to save surface forces, or zero to disable", min=0)] = 1,
+    save_strain_energy: Annotated[int, typer.Option(
+        help="Interval to save strain energy, or zero to disable", min=0)] = 1,
+    save_swarm: Annotated[int, typer.Option(help="Interval to save swarm data, or zero to disable", min=0)] = 200,
+    save_solution: Annotated[int, typer.Option(
+        help="Interval to save projected solution, or zero to disable", min=0)] = 200,
+    save_diagnostics: Annotated[int, typer.Option(
+        help="Interval to save projected diagnostic quantities, or zero to disable", min=0)] = 200,
+    save: Annotated[bool, typer.Option(
+        help="Global flag to enable or disable writing diagnostics. If False, nothing will be written.")] = True,
     yes: Annotated[bool, typer.Option('-y')] = False,
     dry_run: bool = False,
 ):
@@ -164,6 +214,15 @@ def flux_sweep(
     sweep_params = load_sweep_specification(ctx, sweep_spec, quiet=True)
     experiment.user_options = ctx.args
     experiment.logview = log_view
+    set_diagnostic_options(
+        experiment,
+        save_forces=save_forces,
+        save_strain_energy=save_strain_energy,
+        save_swarm=save_swarm,
+        save_solution=save_solution,
+        save_diagnostics=save_diagnostics,
+        save=save
+    )
     flux.sweep(
         experiment,
         machine=machine,
@@ -190,6 +249,16 @@ def flux_uq(
     max_time: Annotated[str, typer.Option("-t")] = None,
     log_view: bool = False,
     machine: Optional[machines.Machine] = None,
+    save_forces: Annotated[int, typer.Option(help="Interval to save surface forces, or zero to disable", min=0)] = 1,
+    save_strain_energy: Annotated[int, typer.Option(
+        help="Interval to save strain energy, or zero to disable", min=0)] = 1,
+    save_swarm: Annotated[int, typer.Option(help="Interval to save swarm data, or zero to disable", min=0)] = 200,
+    save_solution: Annotated[int, typer.Option(
+        help="Interval to save projected solution, or zero to disable", min=0)] = 200,
+    save_diagnostics: Annotated[int, typer.Option(
+        help="Interval to save projected diagnostic quantities, or zero to disable", min=0)] = 200,
+    save: Annotated[bool, typer.Option(
+        help="Global flag to enable or disable writing diagnostics. If False, nothing will be written.")] = True,
     yes: Annotated[bool, typer.Option('-y')] = False,
     dry_run: bool = False,
 ):
@@ -203,6 +272,15 @@ def flux_uq(
     uq_params = pd.read_csv(uq_spec).to_dict(orient='list')
     experiment.user_options = ctx.args
     experiment.logview = log_view
+    set_diagnostic_options(
+        experiment,
+        save_forces=save_forces,
+        save_strain_energy=save_strain_energy,
+        save_swarm=save_swarm,
+        save_solution=save_solution,
+        save_diagnostics=save_diagnostics,
+        save=save
+    )
     flux.uq(
         experiment,
         machine=machine,
