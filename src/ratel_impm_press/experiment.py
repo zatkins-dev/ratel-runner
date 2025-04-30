@@ -106,12 +106,18 @@ class ExperimentConfig(ABC):
     @property
     def config(self) -> str:
         config = self.base_config + self.mesh_options + self.diagnostic_config + self.user_config
-        if self.logview:
-            config += '\n' + '\n'.join([
-                f'log_view: :log_view{self.logview.to_petsc()}',
-                'log_view_memory:',
-                'log_view_gpu_time:',
-            ])
+        match self.logview:
+            case LogViewType.FLAMEGRAPH | LogViewType.XML | LogViewType.DETAIL:
+                config += '\n' + '\n'.join([
+                    f'log_view: :log_view{self.logview.to_petsc()}',
+                    'log_view_gpu_time:',
+                ])
+            case LogViewType.TEXT:
+                config += '\n' + '\n'.join([
+                    f'log_view: :log_view{self.logview.to_petsc()}',
+                    'log_view_gpu_time:',
+                    'log_view_memory:'
+                ])
         return config
 
     def write_config(self, output_dir: Path) -> Path:
