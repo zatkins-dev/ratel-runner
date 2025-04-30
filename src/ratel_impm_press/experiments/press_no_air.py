@@ -82,6 +82,7 @@ def run(
     load_fraction: Annotated[float, typer.Argument(min=0.0, max=1.0)] = 0.4,
     clamp_top: bool = True,
     num_processes: Annotated[int, typer.Option("-n", min=1)] = 1,
+    log_view: Optional[LogViewType] = None,
     save_forces: Annotated[int, typer.Option(help="Interval to save surface forces, or zero to disable", min=0)] = 1,
     save_strain_energy: Annotated[int, typer.Option(
         help="Interval to save strain energy, or zero to disable", min=0)] = 1,
@@ -102,6 +103,8 @@ def run(
         load_fraction=load_fraction,
         clamp_top=clamp_top,
     )
+    experiment.user_options = ctx.args
+    experiment.logview = log_view
     set_diagnostic_options(
         experiment,
         save_forces=save_forces,
@@ -111,7 +114,6 @@ def run(
         save_diagnostics=save_diagnostics,
         save=save
     )
-    experiment.user_options = ctx.args
     local.run(
         experiment,
         num_processes=num_processes,
