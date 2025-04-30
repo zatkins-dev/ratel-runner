@@ -89,5 +89,5 @@ def build_petsc():
 
     config.set("PETSC_DIR", str(repo.dir))
 
-    print(f"[success]PETSc build complete with PETSC_DIR={repo.dir} and PETSC_ARCH={petsc_arch}.")
+    print("[success]PETSc build complete with", f"PETSC_DIR={repo.dir}", f"PETSC_ARCH={petsc_arch}.")
     return repo.dir, petsc_arch

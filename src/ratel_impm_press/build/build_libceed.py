@@ -51,5 +51,5 @@ def build_libceed():
     # Save the directory
     config.set("LIBCEED_DIR", str(repo.dir))
 
-    print(f"[success]libCEED build complete with LIBCEED_DIR={repo.dir}.")
+    print("[success]libCEED build complete with", f"LIBCEED_DIR={repo.dir}.")
     return repo.dir

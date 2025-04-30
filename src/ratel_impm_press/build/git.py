@@ -15,7 +15,7 @@ class Repository:
         if self.uri.startswith('git@'):
             self.uri_end: str = self.uri.split(':')[-1]
         else:
-            self.uri_end: str = urllib.parse.urlsplit(self.uri).path[1:]
+            self.uri_end: str = urllib.parse.urlsplit(self.uri).path[1:].removesuffix('.git')
         self.config_key: str = f'{self.name.upper()}_DIR'
         dir = config.get_fallback(self.config_key, "")
         if dir == "":
