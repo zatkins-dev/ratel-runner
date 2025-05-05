@@ -26,8 +26,8 @@ def get_machine_config(machine: Machine) -> MachineConfig:
     machine = Machine(machine)
     if machine == Machine.TUOLUMNE:
         tuo_packages = [
-            'rocmcc/6.3.1hangfix-cce-19.0.0a-magic',
-            'rocm/6.3.1',
+            'rocmcc/6.4.0-cce-19.0.0d-magic',
+            'rocm/6.4.0',
             'craype-accel-amd-gfx942',
             'cray-python',
             'cray-libsci_acc',
@@ -37,6 +37,7 @@ def get_machine_config(machine: Machine) -> MachineConfig:
         tuo_defines = {
             'HSA_XNACK': '1',
             'MPICH_GPU_SUPPORT_ENABLED': '1',
+            'MPICH_SMP_SINGLE_COPY_MODE': '1',
         }
         return MachineConfig(gpus_per_node=4, bank='guests', partition='pbatch', max_time='24h',
                              ceed_backend='/gpu/hip/gen', packages=tuo_packages, defines=tuo_defines)
