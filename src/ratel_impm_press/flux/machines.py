@@ -39,7 +39,7 @@ def get_machine_config(machine: Machine) -> MachineConfig:
             'MPICH_GPU_SUPPORT_ENABLED': '1',
             'MPICH_SMP_SINGLE_COPY_MODE': '1',
         }
-        return MachineConfig(gpus_per_node=4, bank='guests', partition='pbatch', max_time='24h',
+        return MachineConfig(gpus_per_node=4, bank='uco', partition='pbatch', max_time='12h',
                              ceed_backend='/gpu/hip/gen', packages=tuo_packages, defines=tuo_defines)
     elif machine == Machine.TIOGA:
         tioga_packages = [

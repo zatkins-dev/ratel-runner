@@ -96,6 +96,7 @@ def generate(
         'echo "Flux Resources = $(flux resource info)"',
         '',
         *[f'export {key}={value}' for key, value in machine_config.defines.items()],
+        'ulimit -c unlimited',
         '',
         f'export SCRATCH="{scratch_dir}/{experiment.name}-$CENTER_JOB_ID"',
         'echo ""',
