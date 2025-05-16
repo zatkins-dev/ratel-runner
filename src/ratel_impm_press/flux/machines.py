@@ -32,12 +32,13 @@ def get_machine_config(machine: Machine) -> MachineConfig:
             'cray-python',
             'cray-libsci_acc',
             'cray-hdf5-parallel/1.14.3.5',
-            'flux_wrappers'
+            'flux_wrappers',
+            'cray-mpich/8.1.32',  # needed while 8.1.33 is in beta
         ]
         tuo_defines = {
             'HSA_XNACK': '1',
             'MPICH_GPU_SUPPORT_ENABLED': '1',
-            'MPICH_SMP_SINGLE_COPY_MODE': '1',
+            'MPICH_SMP_SINGLE_COPY_MODE': 'XPMEM',
         }
         return MachineConfig(gpus_per_node=4, bank='uco', partition='pbatch', max_time='12h',
                              ceed_backend='/gpu/hip/gen', packages=tuo_packages, defines=tuo_defines)

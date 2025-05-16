@@ -36,6 +36,7 @@ if [[ "$(hostname)" == "tuolumne"* ]]; then
 	ml +cray-libsci_acc
 	ml +cray-hdf5-parallel/1.14.3.5
 	ml +flux_wrappers
+	ml +cray-mpich/8.1.32
 	export HSA_XNACK=1
 	export MPICH_GPU_SUPPORT_ENABLED=1
 fi
