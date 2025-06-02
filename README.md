@@ -99,7 +99,7 @@ ratel-impm config set PETSC_CONFIG /path/to/reconfigure.py
 ```
 Examples can be found in the [PETSc repository](https://gitlab.com/petsc/petsc/-/tree/main/config/examples).
 
-If you are building on a machine with job scheduling, you should now acquire an interactive allocation, see [#supported-machines] for examples.
+If you are building on a machine with job scheduling, you should now acquire an interactive allocation, see [Supported Machines](#supported-machines) for examples.
 
 Then, Ratel and its dependencies can be built via:
 ```sh
@@ -135,7 +135,7 @@ The list of relevant variables is given below.
 
 | Variable      | Description   | Default |
 | ------------- | ------------- | ------- |
-| `SCRATCH_DIR` | Location to clone and build repositories, store output files from experiments, etc. This should be on a parallel filesystem for most supercomputers. | See [#supported-machines] |
+| `SCRATCH_DIR` | Location to clone and build repositories, store output files from experiments, etc. This should be on a parallel filesystem for most supercomputers. | See [Supported Machines](#supported-machines) |
 | `OUTPUT_DIR`  | Location in which symbolic links to experiment result directories will be created. | Current runtime directory. |
 | `PETSC_DIR`   | Location of cloned PETSc repository. This can be an existing repository, or PETSc will be cloned to this directory if it does not exist. | `$SCRATCH_DIR/build/petsc` |
 | `LIBCEED_DIR` | Location of cloned libCEED repository. This can be an existing repository, or libCEED will be cloned to this directory if it does not exist. | `$SCRATCH_DIR/build/libCEED` |
