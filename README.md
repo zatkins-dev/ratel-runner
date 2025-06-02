@@ -4,8 +4,8 @@ Questions, comments, or concerns? Contact Zach Atkins or leave an issue.
 
 
 ## Installation
-If building on Tuolumne, ensure you have a new enough Python version:
-```
+If building on Tioga or Tuolumne, ensure you have a new enough Python version:
+```sh
 ml +cray-python
 ```
 
@@ -14,24 +14,26 @@ To install the python package, run:
 pip install --user --upgrade git+https://github.com/zatkins-dev/Ratel-iMPM-Press.git
 ```
 
-Set an appropriate `SCRATCH_DIR` and `OUTPUT_DIR`, e.g.
+## Building Ratel
+### Supported Machines
+
+This package supports automatically building Ratel and its dependencies with optimal configurations on:
+- [Tioga](https://hpc.llnl.gov/hardware/compute-platforms/tioga)
+- [Tuolumne](https://hpc.llnl.gov/hardware/compute-platforms/tuolumne)
+
+If building on Tioga or Tuolumne, ensure you have a new enough Python version:
 ```sh
-ratel-impm config set SCRATCH_DIR /p/lustre5/$USER/ratel-cache
-ratel-impm config set OUTPUT_DIR /usr/workspace/$USER/ratel-impm-press
+ml +cray-python
 ```
 
-If you are building on a machine other than Tuolumne, you must also set `PETSC_CONFIG` to the path to a Python PETSc configuration script:
-```sh
-ratel-impm config set PETSC_CONFIG /path/to/reconfigure.py
-```
-
-If you are building on Tuolumne, add these commands to your `~/.bashrc` file:
+#### Tioga
+If you are building on Tioga, add these commands to your `~/.bashrc` or `~/.zshrc` file and ensure they are run before building or acquiring a debug node:
 ```bash
-if [[ "$(hostname)" == "tuolumne"* ]]; then
+if [[ "$(hostname)" == "tioga"* ]]; then
 	module reset
-	ml +rocmcc/6.3.1hangfix-cce-19.0.0a-magic
-	ml +rocm/6.3.1
-	ml +craype-accel-amd-gfx942
+	ml +rocmcc/6.4.0-cce-19.0.0d-magic
+	ml +rocm/6.4.0
+	ml +craype-accel-amd-gfx90a
 	ml +cray-python
 	ml +cray-libsci_acc
 	ml +cray-hdf5-parallel/1.14.3.5
@@ -42,19 +44,107 @@ if [[ "$(hostname)" == "tuolumne"* ]]; then
 fi
 ```
 
-If you are building on a machine with job scheduling, you should now acquire an interactive allocation, e.g. with
+**ALWAYS** build on a debug node. For Tuolumne, you can get such a node with the command:
+```sh
+flux alloc --queue=pdebug --setattr=thp=always -x -N1 -n1 -t 1h
+```
+
+For Tioga, the scratch directory defaults to the `lustre2` parallel filesystem:
+```
+/p/lustre2/$USER/ratel-scratch
+```
+
+#### Tuolumne
+If you are building on Tuolumne, add these commands to your `~/.bashrc` or `~/.zshrc` file and ensure they are run before building or acquiring a debug node:
+```bash
+if [[ "$(hostname)" == "tuolumne"* ]]; then
+	module reset
+	ml +rocmcc/6.4.0-cce-19.0.0d-magic
+	ml +rocm/6.4.0
+	ml +craype-accel-amd-gfx942
+	ml +cray-python
+	ml +cray-libsci_acc
+	ml +cray-hdf5-parallel/1.14.3.5
+	ml +flux_wrappers
+	ml +cray-mpich/8.1.32
+	export HSA_XNACK=1
+	export MPICH_GPU_SUPPORT_ENABLED=1
+	export MPICH_SMP_SINGLE_COPY_MODE=XPMEM
+fi
+```
+
+For Tuolumne, the scratch directory defaults to the `lustre5` parallel filesystem:
+```
+/p/lustre5/$USER/ratel-scratch
+```
+
+**ALWAYS** build on a debug node. For Tuolumne, you can get such a node with the command:
 ```sh
 flux alloc --queue=pdebug --setattr=thp=always --setattr=hugepages=512GB -x -N1 -n1 -t 1h
 ```
+
+### General Build instructions
+
+Set an appropriate `SCRATCH_DIR` and `OUTPUT_DIR`, e.g.
+```sh
+# on supported machines, defaults to /parallel/filesystem/path/$USER/ratel-scratch
+ratel-impm config set SCRATCH_DIR /p/lustre5/$USER/ratel-scratch
+# typically defaults to the directory where commands are run
+ratel-impm config set OUTPUT_DIR /usr/workspace/$USER/ratel-impm-press
+```
+If you are running on a supported machine, these configuration variables are *optional*.
+If you are building on an unsupported machine, you must also set `PETSC_CONFIG` to the path to a Python PETSc configuration script:
+```sh
+ratel-impm config set PETSC_CONFIG /path/to/reconfigure.py
+```
+Examples can be found in the [PETSc repository](https://gitlab.com/petsc/petsc/-/tree/main/config/examples).
+
+If you are building on a machine with job scheduling, you should now acquire an interactive allocation, see [#supported-machines] for examples.
 
 Then, Ratel and its dependencies can be built via:
 ```sh
 ratel-impm build ratel
 ```
 
+#### Configuration Variables
+The following configuration variables are used to build Ratel and run experiments.
+The preferred way to set configuration variables is through the `ratel-impm config` command.
+```console
+> ratel-impm config --help
+
+ Usage: ratel-impm config [OPTIONS] COMMAND [ARGS]...
+
+ Read/write values in the application configuration file.
+
+╭─ Options ─────────────────────────────────────────────────────────────╮
+│ --machine        [tuolumne|tioga|default]  [default: None]            │
+│ --help                                     Show this message and      │
+│                                            exit.                      │
+╰───────────────────────────────────────────────────────────────────────╯
+╭─ Commands ────────────────────────────────────────────────────────────╮
+│ unset   Remove a key from the configuration file.                     │
+│ set     Set a key-value pair in the configuration file.               │
+│ get     Get the value of a key in the configuration file.             │
+│ list    List all keys and values in the configuration file.           │
+│ copy    Copy all configuration variables from one machine to another. │
+╰───────────────────────────────────────────────────────────────────────╯
+```
+Alternatively, you can set the variables as environmental variables.
+
+The list of relevant variables is given below.
+
+| Variable      | Description   | Default |
+| ------------- | ------------- | ------- |
+| `SCRATCH_DIR` | Location to clone and build repositories, store output files from experiments, etc. This should be on a parallel filesystem for most supercomputers. | See [#supported-machines] |
+| `OUTPUT_DIR`  | Location in which symbolic links to experiment result directories will be created. | Current runtime directory. |
+| `PETSC_DIR`   | Location of cloned PETSc repository. This can be an existing repository, or PETSc will be cloned to this directory if it does not exist. | `$SCRATCH_DIR/build/petsc` |
+| `LIBCEED_DIR` | Location of cloned libCEED repository. This can be an existing repository, or libCEED will be cloned to this directory if it does not exist. | `$SCRATCH_DIR/build/libCEED` |
+| `RATEL_DIR`   | Location of cloned Ratel repository. This can be an existing repository, or Ratel will be cloned to this directory if it does not exist. | `$SCRATCH_DIR/build/ratel` |
+
+
 ## Running experiments
 
-Experiments are run through the `ratel-impm-press press` command, use the help flag for a list of options.
+Experiments are run through the `ratel-impm press` command, use the help flag for a list of options.
 ```sh
 ratel-impm press --help
 ```

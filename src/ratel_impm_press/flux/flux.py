@@ -6,6 +6,7 @@ from rich import print, get_console
 import subprocess
 import shutil
 from itertools import product
+from typing import Optional
 
 from .. import config
 from .machines import Machine, get_machine_config, detect_machine
@@ -17,11 +18,11 @@ console = get_console()
 
 def generate(
     experiment: ExperimentConfig,
-    machine: Machine | None,
+    machine: Optional[Machine],
     num_processes: int,
-    max_time: str = None,
-    link_name: str = None,
-    output_dir: Path = None,
+    max_time: Optional[str] = None,
+    link_name: Optional[str] = None,
+    output_dir: Optional[Path] = None,
     additional_args: str = ""
 ) -> tuple[Path, Path]:
     """Generate a flux script to run the experiments."""
@@ -63,7 +64,8 @@ def generate(
     if output_link.exists() and link_name is not None:
         output_link.unlink()
 
-    command = f'{ratel_dir}/bin/ratel-quasistatic -ceed {machine_config.ceed_backend} -options_file "$SCRATCH/options.yml" {additional_args}'
+    ratel = f'{ratel_dir}/bin/ratel-quasistatic'
+    command = f'{ratel} -ceed {machine_config.ceed_backend} -options_file "$SCRATCH/options.yml" {additional_args}'
 
     script = '\n'.join([
         '#!/bin/bash',
@@ -152,9 +154,9 @@ def run(script_path: Path):
 
 def sweep(
     experiment: ExperimentConfig,
-    machine: Machine | None,
+    machine: Optional[Machine],
     num_processes: int,
-    max_time: str = None,
+    max_time: Optional[str] = None,
     parameters: dict = {},
     sweep_name: str = 'sweep',
     yes: bool = False,
@@ -236,7 +238,7 @@ def sweep(
 
         scripts.append(script_path)
         print(f"[info]  Script written to: {script_path}[/]")
-        print(f"[info]  Output directory:  {sweep_output_dir/link_name}[/]")
+        print(f"[info]  Output directory:  {sweep_output_dir / link_name}[/]")
 
     print(f"[info]All scripts written to: {sweep_script_dir}[/]")
     print("")
@@ -252,9 +254,9 @@ def sweep(
 
 def uq(
     experiment: ExperimentConfig,
-    machine: Machine | None,
+    machine: Optional[Machine],
     num_processes: int,
-    max_time: str = None,
+    max_time: Optional[str] = None,
     parameters: dict = {},
     sweep_name: str = 'uq',
     yes: bool = False,
@@ -334,7 +336,7 @@ def uq(
 
         scripts.append(script_path)
         print(f"[info]  Script written to: {script_path}[/]")
-        print(f"[info]  Output directory:  {sweep_output_dir/link_name}[/]")
+        print(f"[info]  Output directory:  {sweep_output_dir / link_name}[/]")
 
     print(f"[info]All scripts written to: {sweep_script_dir}[/]")
     print("")

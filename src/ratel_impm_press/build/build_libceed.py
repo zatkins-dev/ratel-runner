@@ -1,5 +1,7 @@
 import subprocess
 from rich import print
+from typing import Annotated
+import typer
 
 from .git import Repository
 from .build import app
@@ -25,7 +27,7 @@ def get_repository():
 
 
 @app.command("libceed")
-def build_libceed():
+def build_libceed(force: Annotated[bool, typer.Option('-f', '--force')] = False):
     """Build PETSc."""
     print("[h1]Building libCEED[/h1]")
 
@@ -38,12 +40,15 @@ def build_libceed():
 
     # Copy the configuration file to the repository directory
     config_file = repo.dir / 'config.mk'
-    if not config_file.exists():
+    if force or not config_file.exists():
         print("[info]Creating default configuration file.")
         config_file.write_text(CONFIG_DEFAULT)
 
     # Run the make command
-    make_command = ["make", "-j", "lib"]
+    if force:
+        make_command = ["make", "-B", "-j", "lib"]
+    else:
+        make_command = ["make", "-j", "lib"]
     print("[info]Running make command:")
     print("  > ", " ".join(make_command))
     subprocess.run(make_command, cwd=repo.dir, check=True)

@@ -3,19 +3,27 @@ import json
 from pathlib import Path
 from rich import print
 import os
+from typing import Annotated
 
-__all__ = ['get_app_dir', 'get', 'set', 'unset', 'get_fallback', 'app', 'parse_common_args']
+from .flux import machines
+
+__all__ = ['get_app_dir', 'get', 'set', 'unset', 'get_fallback', 'app']
 
 
 _configuration = None
 
 
-def _get_config():
+def _get_config(machine: machines.Machine | None = None):
     """
     Get the configuration file, creating it if it does not exist.
     """
+    if machine is None:
+        machine = machines.detect_machine()
     app_dir = get_app_dir()
-    config_file = app_dir / "config.json"
+    if machine is None or machine == machines.Machine.DEFAULT:
+        config_file = app_dir / "config.json"
+    else:
+        config_file = app_dir / f'{machine.value.lower()}' / "config.json"
     if not config_file.exists():
         config_file.parent.mkdir(parents=True, exist_ok=True)
         config = {}
@@ -23,23 +31,29 @@ def _get_config():
     return config_file
 
 
-def _get_runtime_config():
+def _get_runtime_config(machine: machines.Machine | None = None) -> dict:
     """
     Read/write values in the application configuration file.
     """
+    if machine is None:
+        machine = machines.detect_machine()
     global _configuration
-    if _configuration is not None:
-        return _configuration
-    config_file = _get_config()
-    _configuration = json.loads(config_file.read_text())
-    return _configuration
+    if _configuration is None:
+        _configuration = dict()
+    if _configuration.get(machine, None) is not None:
+        return _configuration[machine]
+    config_path = _get_config(machine)
+    _configuration[machine] = json.loads(config_path.read_text())
+    return _configuration[machine]
 
 
-def _write_runtime_config(ctx: typer.Context):
-    config = _get_runtime_config()
-    app_dir = get_app_dir()
-    config_file = app_dir / "config.json"
-    config_file.write_text(json.dumps(config, indent=2))
+def _write_runtime_config(ctx: typer.Context, **kwargs):
+    global _configuration
+    if not _configuration:
+        return
+    for machine, config in _configuration.items():
+        config_file = _get_config(machine)
+        config_file.write_text(json.dumps(config, indent=2))
 
 
 app = typer.Typer(callback=_get_runtime_config, result_callback=_write_runtime_config)
@@ -49,28 +63,28 @@ def get_app_dir():
     return Path(typer.get_app_dir("ratel-impm-press"))
 
 
-def unset(key: str):
+def unset(key: str, machine: machines.Machine | None = None):
     """
     Remove a key from the runtime configuration.
     """
-    config = _get_runtime_config()
+    config = _get_runtime_config(machine=machine)
     if key in config:
         del config[key]
 
 
 @app.command('unset')
-def unset_cmd(key: str):
+def unset_cmd(key: str, machine: machines.Machine | None = None):
     """
     Remove a key from the configuration file.
     """
-    unset(key)
+    unset(key, machine=machine)
 
 
-def set(key: str, value: str, quiet: bool = True):
+def set(key: str, value: str, machine: machines.Machine | None = None, quiet: bool = True):
     """
     Set a key-value pair in the runtime configuration.
     """
-    config = _get_runtime_config()
+    config = _get_runtime_config(machine)
     if not quiet:
         if key in config:
             print(f"Key {key} already exists. Overwriting value.")
@@ -80,52 +94,66 @@ def set(key: str, value: str, quiet: bool = True):
 
 
 @app.command('set')
-def set_cmd(key: str, value: str):
+def set_cmd(key: str, value: str, machine: machines.Machine | None = None):
     """
     Set a key-value pair in the configuration file.
     """
-    set(key, value, quiet=False)
+    set(key, value, machine=machine, quiet=False)
 
 
-def get(key: str):
+def get(key: str, machine: machines.Machine | None = None):
     """
     Internal helper function to get the value of a key from the config file.
     """
-    config = _get_runtime_config()
+    config = _get_runtime_config(machine)
     return config.get(key, None)
 
 
 @app.command('get')
-def get_cmd(key: str):
+def get_cmd(key: str, machine: machines.Machine | None = None):
     """
     Get the value of a key in the configuration file.
     """
-    val = get(key)
+    val = get(key, machine=machine)
     print(f"{key}: ", "Key not found." if val is None else val)
 
 
-def list():
+def list(machine: machines.Machine | None = None):
     """
     List all keys in the configuration file.
     """
-    config = _get_runtime_config()
+    config = _get_runtime_config(machine)
+    if len(config) == 0:
+        print("[success]Configuration empty, use `config set` to add configuration variables")
     for key, value in config.items():
         print(f"{key}: {value}")
 
 
 @app.command('list')
-def list_cmd():
+def list_cmd(machine: machines.Machine | None = None):
     """
     List all keys and values in the configuration file.
     """
-    list()
+    list(machine=machine)
 
 
-def get_fallback(key: str, default=None):
+@app.command('copy')
+def copy_cmd(src: machines.Machine, dst: Annotated[machines.Machine | None, typer.Argument()] = None):
+    """
+    Copy all configuration variables from one machine to another
+    """
+    config_from: dict = _get_runtime_config(src)
+    config_to: dict = _get_runtime_config(dst)
+    config_to.clear()
+    for key, value in config_from.items():
+        config_to[key] = value
+
+
+def get_fallback(key: str, default=None, machine: machines.Machine | None = None):
     """
     Get the value of a key from the runtime config, environment variable, default provided, or raise an error.
     """
-    value = get(key)
+    value = get(key, machine=machine)
     if value is not None:
         return value
     value = os.environ.get(key, None)

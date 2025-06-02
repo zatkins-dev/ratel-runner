@@ -1,5 +1,7 @@
 import subprocess
 from rich import print
+import typer
+from typing import Annotated
 
 from .git import Repository
 from .build import app
@@ -21,7 +23,7 @@ def get_repository():
 
 
 @app.command("ratel")
-def build_ratel():
+def build_ratel(force: Annotated[bool, typer.Option('-f', '--force')] = False):
     """Build Ratel and its dependencies."""
     petsc_dir, petsc_arch = build_petsc.build_petsc()
     libceed_dir = build_libceed.build_libceed()
@@ -37,7 +39,7 @@ def build_ratel():
 
     # Copy the configuration file to the repository directory
     config_file = repo.dir / 'config.mk'
-    if not config_file.exists():
+    if force or not config_file.exists():
         print("[info]Creating default configuration file.")
         config_str = CONFIG_DEFAULT + "\n".join([
             f"PETSC_DIR={petsc_dir}",
@@ -48,7 +50,10 @@ def build_ratel():
         config_file.write_text(config_str)
 
     # Run the make command
-    make_command = ["make", "-j"]
+    if force:
+        make_command = ["make", "-B", "-j"]
+    else:
+        make_command = ["make", "-j"]
     print("[info]Running make command:")
     print("  > ", " ".join(make_command))
     subprocess.run(make_command, cwd=repo.dir, check=True)

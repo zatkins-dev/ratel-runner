@@ -2,6 +2,7 @@ from pathlib import Path
 import subprocess
 import urllib
 import urllib.parse
+from ..flux.machines import detect_machine, get_scratch
 
 from .. import config
 
@@ -19,7 +20,9 @@ class Repository:
         self.config_key: str = f'{self.name.upper()}_DIR'
         dir = config.get_fallback(self.config_key, "")
         if dir == "":
-            base_path = Path(config.get_fallback('SCRATCH_DIR')).resolve() / 'build'
+            machine = detect_machine()
+            scratch = get_scratch(machine)
+            base_path = Path(config.get_fallback('SCRATCH_DIR', f'{scratch}')).resolve() / 'build'
             if not base_path.exists():
                 base_path.mkdir(parents=True)
             self.dir = base_path / self.name
