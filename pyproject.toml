@@ -10,7 +10,6 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "typer (>=0.15.2,<0.16.0)",
-    "gmsh (>=4.13.1,<5.0.0)",
     "pyyaml (>=6.0.2,<7.0.0)",
     "pandas (>=2.2.3,<3.0.0)",
 ]
@@ -24,3 +23,9 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 packages = [{include = "ratel_impm_press", from = "src"}]
+
+[tool.poetry.group.gmsh]
+optional = true
+
+[tool.poetry.group.gmsh.dependencies]
+gmsh = "^4.13.1"
