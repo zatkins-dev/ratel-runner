@@ -5,14 +5,39 @@ Questions, comments, or concerns? Contact Zach Atkins or leave an issue.
 
 ## Installation
 If building on Tioga or Tuolumne, ensure you have a new enough Python version:
-```sh
+```bash
 ml +cray-python
+```
+For Lassen, instead use:
+```bash
 ```
 
 To install the python package, run:
-```sh
+```bash
 pip install --user --upgrade git+https://github.com/zatkins-dev/Ratel-iMPM-Press.git
 ```
+
+
+On Lassen, you should first make a virtual environment and ensure new enough compilers are set for building `numpy`:
+```bash
+	ml +python/3.11.5
+	ml +base-gcc/11.2.1
+
+
+	# create virtual environment
+	python -m virtualenv .venv
+	# activate virtual environment
+	. .venv/bin/activate
+	# install ratel-impm-press
+	CC=gcc CXX=g++ pip install --upgrade git+https://github.com/zatkins-dev/Ratel-iMPM-Press.git
+```
+
+If you want to run implicit MPM experiments, you will need to use the `--with gmsh` flag to ensure the dependency is installed:
+```bash
+pip install --with gmsh --user --upgrade git+https://github.com/zatkins-dev/Ratel-iMPM-Press.git
+```
+Note, the `gmsh` package is unavailable on Lassen.
+
 
 ## Building Ratel
 ### Supported Machines

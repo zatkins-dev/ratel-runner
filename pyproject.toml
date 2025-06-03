@@ -1,6 +1,6 @@
 [project]
 name = "ratel-impm-press"
-version = "0.1.19"
+version = "0.1.20"
 description = "Experiment Scripts for Ratel Implicit Material Point Method"
 authors = [
     {name = "Zach Atkins",email = "zach.atkins@colorado.edu"}

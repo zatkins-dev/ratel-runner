@@ -1,4 +1,3 @@
-import gmsh
 from pathlib import Path
 import rich
 from rich.syntax import Syntax
@@ -63,6 +62,8 @@ def get_mesh(characteristic_length: float, voxel_data: Path,
 
     :return: A dictionary of mesh options for the experiment configuration.
     """
+    import gmsh
+
     mesh_file: Path = generate_mesh(characteristic_length, voxel_data, scratch_dir)
 
     options: str = '\n'.join([
