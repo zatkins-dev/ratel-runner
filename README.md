@@ -20,10 +20,15 @@ pip install --user --upgrade git+https://github.com/zatkins-dev/Ratel-iMPM-Press
 This package supports automatically building Ratel and its dependencies with optimal configurations on:
 - [Tioga](https://hpc.llnl.gov/hardware/compute-platforms/tioga)
 - [Tuolumne](https://hpc.llnl.gov/hardware/compute-platforms/tuolumne)
+- [Lassen](https://hpc.llnl.gov/hardware/compute-platforms/lassen)
 
 If building on Tioga or Tuolumne, ensure you have a new enough Python version:
 ```sh
 ml +cray-python
+```
+For Lassen, instead use
+```sh
+ml +python/3.11.5
 ```
 
 #### Tioga
@@ -44,7 +49,7 @@ if [[ "$(hostname)" == "tioga"* ]]; then
 fi
 ```
 
-**ALWAYS** build on a debug node. For Tuolumne, you can get such a node with the command:
+**ALWAYS** build on a debug node. For Tioga, you can get such a node with the command:
 ```sh
 flux alloc --queue=pdebug --setattr=thp=always -x -N1 -n1 -t 1h
 ```
@@ -73,15 +78,38 @@ if [[ "$(hostname)" == "tuolumne"* ]]; then
 fi
 ```
 
+**ALWAYS** build on a debug node. For Tuolumne, you can get such a node with the command:
+```sh
+flux alloc --queue=pdebug --setattr=thp=always --setattr=hugepages=512GB -x -N1 -n1 -t 1h
+```
+
 For Tuolumne, the scratch directory defaults to the `lustre5` parallel filesystem:
 ```
 /p/lustre5/$USER/ratel-scratch
 ```
 
-**ALWAYS** build on a debug node. For Tuolumne, you can get such a node with the command:
-```sh
-flux alloc --queue=pdebug --setattr=thp=always --setattr=hugepages=512GB -x -N1 -n1 -t 1h
+#### Lassen
+```bash
+if [[ "$(hostname)" == "lassen"* ]]; then
+	ml +clang/ibm-18.1.8-cuda-11.8.0-gcc-11.2.1
+	ml +cuda/11.8.0
+	ml +base-gcc/11.2.1
+	ml +essl
+	ml +lapack
+	ml +python/3.11.5
+fi
 ```
+
+**ALWAYS** build on a debug node. For Lassen, you can get such a node with the command:
+```sh
+lalloc 1
+```
+
+For Lassen, the scratch directory defaults to the `gpfs1` parallel filesystem:
+```
+/p/gpfs1/$USER/ratel-scratch
+```
+
 
 ### General Build instructions
 

@@ -24,6 +24,7 @@ class Machine(Enum):
     """Enumeration of the machines that can be used for the experiments."""
     TUOLUMNE = 'tuolumne'
     TIOGA = 'tioga'
+    LASSEN = 'lassen'
     DEFAULT = 'default'
 
 
@@ -80,6 +81,23 @@ def get_machine_config(machine: Machine) -> MachineConfig:
             parallel_filesystem=Path('/p/lustre2'),
             packages=tioga_packages,
             defines=tioga_defines)
+    elif machine == Machine.LASSEN:
+        lassen_packages = [
+            'clang/ibm-18.1.8-cuda-11.8.0-gcc-11.2.1',
+            'cuda/11.8.0',
+            'base-gcc/11.2.1',
+            'essl',
+            'lapack',
+            'python/3.11.5',
+        ]
+        return MachineConfig(
+            gpus_per_node=8,
+            bank='uco',
+            partition='pdebug',
+            max_time='12h',
+            ceed_backend='/gpu/cuda/gen',
+            parallel_filesystem=Path('/p/gpfs1'),
+            packages=lassen_packages)
     else:
         raise ValueError(f'Invalid machine: {machine}')
 
@@ -91,6 +109,8 @@ def detect_machine() -> Machine | None:
         return Machine.TUOLUMNE
     elif hostname.startswith('tioga'):
         return Machine.TIOGA
+    elif hostname.startswith('lassen'):
+        return Machine.LASSEN
     print(f'[warning]Could not detect machine from hostname: {hostname}, are you connected to the right machine?[/]')
     return None
 
