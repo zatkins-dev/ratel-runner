@@ -1,20 +1,26 @@
 import subprocess
 from rich import print
-from typing import Annotated
+from typing import Annotated, Optional
 import typer
 
 from .git import Repository
 from .build import app
 from .. import config
+from ..flux.machines import detect_gpu_backend, GPUBackend
 
 URI = "https://github.com/CEED/libCEED.git"
 CONFIG_DEFAULT = """# libCEED configuration file
 OPT=-O3 -g -fno-signed-zeros -freciprocal-math -ffp-contract=fast -march=native -fPIC -Wno-pass-failed -fassociative-math -fno-math-errno
 
-ROCM_DIR=${ROCM_PATH}
 CC=$(shell which mpicc)
 CXX=$(shell which mpicxx)
 FC=
+"""
+CONFIG_ROCM = """
+ROCM_DIR=${ROCM_PATH}
+"""
+CONFIG_CUDA = """
+CUDA_DIR=${ROCM_PATH}
 """
 
 
@@ -27,14 +33,24 @@ def get_repository():
 
 
 @app.command("libceed")
-def build_libceed(force: Annotated[bool, typer.Option('-f', '--force')] = False):
+def build_libceed(branch: Optional[str] = None, force: Annotated[bool, typer.Option('-f', '--force')] = False):
     """Build PETSc."""
     print("[h1]Building libCEED[/h1]")
 
     repo = get_repository()
+
+    if branch is None:
+        branch = repo.branch
+    else:
+        repo.checkout(branch)
+
     if not repo.is_up_to_date():
-        print("[info]Repository is not up to date. Pulling latest changes...")
-        repo.pull()
+        pull = force
+        if not force:
+            pull = typer.confirm(f"[info]Repository is not up to date. Pull latest changes from {branch}?")
+        if pull:
+            print("[info]Pulling latest changes...")
+            repo.pull()
     else:
         print("[info]Repository is up to date.")
 
@@ -42,7 +58,13 @@ def build_libceed(force: Annotated[bool, typer.Option('-f', '--force')] = False)
     config_file = repo.dir / 'config.mk'
     if force or not config_file.exists():
         print("[info]Creating default configuration file.")
-        config_file.write_text(CONFIG_DEFAULT)
+        backend = detect_gpu_backend()
+        if backend == GPUBackend.CUDA:
+            config_file.write_text('\n'.join([CONFIG_DEFAULT, CONFIG_CUDA]))
+        elif backend == GPUBackend.ROCM:
+            config_file.write_text('\n'.join([CONFIG_DEFAULT, CONFIG_ROCM]))
+        else:
+            config_file.write_text(CONFIG_DEFAULT)
 
     # Run the make command
     if force:

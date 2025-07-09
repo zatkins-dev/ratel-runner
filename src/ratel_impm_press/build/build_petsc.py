@@ -4,7 +4,7 @@ import importlib.resources
 from rich import print
 import re
 import typer
-from typing import Annotated
+from typing import Annotated, Optional
 
 from ..flux.machines import Machine, detect_machine
 from .. import config
@@ -24,24 +24,35 @@ def get_config(machine: Machine | None) -> str:
             "Unsupported machine configuration. Set the PETSC_CONFIG environment variable to a suitable python script.")
 
 
-def get_repository():
+def get_repository() -> Repository:
     """Get the repository."""
     repo = Repository(URI)
     if not repo.is_cloned():
         repo.clone()
+        repo.checkout('release')
     return repo
 
 
 @app.command("petsc")
-def build_petsc(force: Annotated[bool, typer.Option('-f', '--force')] = False):
+def build_petsc(branch: Optional[str] = None, force: Annotated[bool, typer.Option('-f', '--force')] = False):
     """Build PETSc."""
     print("[h1]Building PETSc[/h1]")
     machine = detect_machine()
 
     repo = get_repository()
+    if branch is None:
+        branch = repo.branch
+    else:
+        print(f"[info]Checking out {branch} and pulling latest changes...")
+        repo.checkout(branch)
+
     if not repo.is_up_to_date():
-        print("[info]Repository is not up to date. Pulling latest changes...")
-        repo.pull()
+        pull = force
+        if not force:
+            pull = typer.confirm(f"\nRepository is not up to date. Pull latest changes from {branch}?")
+        if pull:
+            print("[info]Pulling latest changes...")
+            repo.pull()
     else:
         print("[info]Repository is up to date.")
 

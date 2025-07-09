@@ -2,7 +2,9 @@ from pathlib import Path
 import subprocess
 import urllib
 import urllib.parse
+from rich import print
 from ..flux.machines import detect_machine, get_scratch
+import typer
 
 from .. import config
 
@@ -18,6 +20,7 @@ class Repository:
         else:
             self.uri_end: str = urllib.parse.urlsplit(self.uri).path[1:].removesuffix('.git')
         self.config_key: str = f'{self.name.upper()}_DIR'
+        self._branch = None
         dir = config.get_fallback(self.config_key, "")
         if dir == "":
             machine = detect_machine()
@@ -31,6 +34,20 @@ class Repository:
 
     def __str__(self):
         return f"Repository(name={self.name}, uri={self.uri}, uri_end={self.uri_end}, config_key={self.config_key}, dir={self.dir})"
+
+    @property
+    def branch(self):
+        if self._branch:
+            return self._branch
+        result = subprocess.run(['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
+                                cwd=self.dir, check=True, capture_output=True)
+        self._branch = result.stdout.decode().strip()
+        return self._branch
+
+    def checkout(self, branch):
+        if self.branch == branch:
+            return
+        self.pull(branch=branch)
 
     def is_up_to_date(self):
         """Check if the repository is up to date."""
@@ -58,5 +75,21 @@ class Repository:
     def pull(self, branch='main'):
         """Pull the latest changes from the repository."""
         subprocess.run(['git', 'fetch'], cwd=self.dir, check=True)
-        subprocess.run(['git', 'checkout', branch], cwd=self.dir, check=True)
-        subprocess.run(['git', 'reset', '--hard', f'origin/{branch}'], cwd=self.dir, check=True)
+        res = subprocess.run(['git', 'checkout', branch], cwd=self.dir, check=False, capture_output=True)
+        if res.returncode != 0:
+            print(res.stderr.decode())
+            if 'Your local changes to the following files would be overwritten by checkout' in res.stderr.decode():
+                if typer.confirm('You have uncommitted changes. Stash and checkout?'):
+                    subprocess.run(['git', 'stash'], cwd=self.dir, check=True)
+                elif typer.confirm('Okay, would you rather reset changes? (THIS CANNOT BE UNDONE)'):
+                    subprocess.run(['git', 'reset', '--hard', f'origin/{self.branch}'], cwd=self.dir, check=True)
+                else:
+                    print(
+                        f'[error]Failed to checkout {branch} due to dirty git working tree. Commit, stash, or remove your changes to continue.')
+                    raise typer.Exit(1)
+                subprocess.run(['git', 'checkout', branch], cwd=self.dir, check=True)
+
+            else:
+                typer.Exit(1)
+        self._branch = branch
+        subprocess.run(['git', 'pull', '--ff'], cwd=self.dir, check=True)

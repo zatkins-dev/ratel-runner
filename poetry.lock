@@ -34,7 +34,7 @@ version = "4.13.1"
 description = "Gmsh is a three-dimensional finite element mesh generator with built-in pre- and post-processing facilities."
 optional = false
 python-versions = "*"
-groups = ["main", "gmsh"]
+groups = ["gmsh"]
 files = [
     {file = "gmsh-4.13.1-py2.py3-none-macosx_10_15_x86_64.whl", hash = "sha256:24ae76443d9df1fd10661c499cbfd0c877677b10b96d5bd72cd07e54aba1df55"},
     {file = "gmsh-4.13.1-py2.py3-none-macosx_12_0_arm64.whl", hash = "sha256:179cfb7ce5d90c6695403cdd8a2cd23ec1a42b14f3485d814bc0eff9403c3204"},
@@ -425,4 +425,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10"
-content-hash = "71d3bb2ee0f17a40167a5f826ba3ef3d097729d1eb84d1540d05ded822054ded"
+content-hash = "567962d256854b558bf82caad375590e62d0c2830a42b00538afad882ba19b84"

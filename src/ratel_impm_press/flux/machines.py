@@ -2,10 +2,17 @@ from enum import Enum
 from dataclasses import dataclass, field
 import platform
 import getpass
+import os
 from pathlib import Path
 from rich import print
 
 from ..import config
+
+
+class GPUBackend(Enum):
+    ROCM = 'rocm'
+    CUDA = 'cuda'
+    UNKNOWN = 'unknown'
 
 
 @dataclass
@@ -100,6 +107,20 @@ def get_machine_config(machine: Machine) -> MachineConfig:
             packages=lassen_packages)
     else:
         raise ValueError(f'Invalid machine: {machine}')
+
+
+def detect_gpu_backend() -> GPUBackend:
+    machine = detect_machine()
+    if machine in [Machine.TUOLUMNE, Machine.TIOGA]:
+        return GPUBackend.ROCM
+    elif machine in [Machine.LASSEN]:
+        return GPUBackend.CUDA
+
+    if "CUDA_DIR" in os.environ.keys():
+        return GPUBackend.CUDA
+    if "ROCM_PATH" in os.environ.keys():
+        return GPUBackend.ROCM
+    return GPUBackend.UNKNOWN
 
 
 def detect_machine() -> Machine | None:

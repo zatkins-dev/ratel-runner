@@ -1,7 +1,7 @@
 import subprocess
 from rich import print
 import typer
-from typing import Annotated
+from typing import Annotated, Optional
 
 from .git import Repository
 from .build import app
@@ -23,17 +23,32 @@ def get_repository():
 
 
 @app.command("ratel")
-def build_ratel(force: Annotated[bool, typer.Option('-f', '--force')] = False):
+def build_ratel(
+    branch: Optional[str] = None,
+    force: Annotated[bool, typer.Option('-f', '--force')] = False,
+    petsc_branch: Optional[str] = None,
+    libceed_branch: Optional[str] = None
+):
     """Build Ratel and its dependencies."""
-    petsc_dir, petsc_arch = build_petsc.build_petsc()
-    libceed_dir = build_libceed.build_libceed()
+    petsc_dir, petsc_arch = build_petsc.build_petsc(branch=petsc_branch, force=force)
+    libceed_dir = build_libceed.build_libceed(branch=libceed_branch, force=force)
 
     print("[h1]Building Ratel[/h1]")
 
     repo = get_repository()
+
+    if branch is None:
+        branch = repo.branch
+    else:
+        repo.checkout(branch)
+
     if not repo.is_up_to_date():
-        print("[info]Repository is not up to date. Pulling latest changes...")
-        repo.pull()
+        pull = force
+        if not force:
+            pull = typer.confirm(f"[info]Repository is not up to date. Pull latest changes from {branch}?")
+        if pull:
+            print("[info]Pulling latest changes...")
+            repo.pull()
     else:
         print("[info]Repository is up to date.")
 

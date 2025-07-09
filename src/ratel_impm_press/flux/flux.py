@@ -80,6 +80,7 @@ def generate(
         f'#flux: -B {machine_config.bank}',
         '#flux: --setattr=thp=always # Transparent Huge Pages',
         '#flux: -l # Add task rank prefixes to each line of output.',
+        ('#flux: --setattr=hugepages=512GB' if machine == Machine.TUOLUMNE else ''),
         '',
         'echo "~~~~~~~~~~~~~~~~~~~"',
         'echo "Welcome!"',

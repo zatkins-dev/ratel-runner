@@ -3,13 +3,14 @@ from pathlib import Path
 from rich import print
 import subprocess
 import datetime
+from typing import Optional
 
 from . import config
 from .experiment import ExperimentConfig
 
 
-def run(experiment: ExperimentConfig, num_processes: int = 1, ratel_dir: Path = None,
-        out: Path = None, scratch_dir: Path = None, dry_run: bool = False):
+def run(experiment: ExperimentConfig, num_processes: int = 1, ratel_dir: Optional[Path] = None,
+        out: Optional[Path] = None, scratch_dir: Optional[Path] = None, dry_run: bool = False):
     """Run the experiment locally."""
     # Resolve paths
     if ratel_dir is None:
@@ -63,7 +64,7 @@ def run(experiment: ExperimentConfig, num_processes: int = 1, ratel_dir: Path = 
         return
 
     if not dry_run:
-        with out_file.open('wb') as out, err_file.open('wb') as err:
-            subprocess.run(cmd_arr, cwd=run_dir.resolve(), stdout=out, stderr=err)
+        with out_file.open('wb') as outfile, err_file.open('wb') as err:
+            subprocess.run(cmd_arr, cwd=run_dir.resolve(), stdout=outfile, stderr=err)
     else:
         print(f"Command: {' '.join(cmd_arr)}")
