@@ -1,0 +1,10 @@
+[project]
+name = "ratel-impm"
+version = "0.2.0"
+description = "Experiment Scripts for Ratel Implicit Material Point Method"
+readme = "README.md"
+requires-python = ">=3.9, <4.0"
+dependencies = ["ratel-helper", "gmsh<5.0.0,>=4.13.1", "pandas<3.0.0,>=2.2.3", "pyyaml>=6.0.2,<7.0.0"]
+
+[project.scripts]
+ratel-impm = "ratel_impm.main:app"

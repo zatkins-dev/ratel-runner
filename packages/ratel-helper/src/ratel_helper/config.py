@@ -60,7 +60,7 @@ app = typer.Typer(callback=_get_runtime_config, result_callback=_write_runtime_c
 
 
 def get_app_dir():
-    return Path(typer.get_app_dir("ratel-impm-press"))
+    return Path(typer.get_app_dir("ratel-runner"))
 
 
 def unset(key: str, machine: machines.Machine | None = None):

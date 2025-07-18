@@ -1,12 +1,11 @@
-from ..experiment import ExperimentConfig, LogViewType
 from pathlib import Path
 import typer
 from typing import Annotated, Optional
-from ..flux import machines, flux
+from ratel_helper.flux import machines, flux
+from ratel_helper.experiment import ExperimentConfig, LogViewType
 
 
 _base_side_length = 0.1
-__doc__ = "Efficiency experiment configurations for optimal point/GPU determination, no mesh remapping."
 _efficiency_base_config = f"""# Single material, simple test to determine optimal point/GPU
 method: mpm
 mpm:
@@ -64,13 +63,14 @@ pc:
 
 
 class EfficiencyForcingExperiment(ExperimentConfig):
+    """Efficiency experiment configurations for optimal point/GPU determination, no mesh remapping."""
     num_cells_1d: int
 
     def __init__(self, num_cells_1d: int, order: int = 1, points_per_cell: int = 27):
         self.num_cells_1d = num_cells_1d
         self.num_points_per_cell = points_per_cell
         self.order = order
-        super().__init__(Path(__file__).stem.replace('_', '-'), __doc__, _efficiency_base_config)
+        super().__init__(Path(__file__).stem.replace('_', '-'), self.__doc__, _efficiency_base_config)
 
     @property
     def mesh_options(self) -> str:
@@ -109,12 +109,14 @@ class EfficiencyForcingExperiment(ExperimentConfig):
             output += "\n".join([f"  • {key}: {value}" for key, value in self.user_options.items()])
         return output
 
+__doc__ = EfficiencyForcingExperiment.__doc__
 
 app = typer.Typer()
 
 
 @app.command()
-def write_config(num_cells_1d: Annotated[int, typer.Argument(min=3)], output_dir: Path, log_view: bool = False):
+def write_config(num_cells_1d: Annotated[int, typer.Argument(min=3)],
+                 output_dir: Path, log_view: Optional[LogViewType] = None):
     """Generate the efficiency experiment configuration."""
     experiment = EfficiencyForcingExperiment(num_cells_1d)
     experiment.logview = log_view

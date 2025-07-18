@@ -4,13 +4,11 @@ import rich
 from rich.logging import RichHandler
 from rich.theme import Theme
 from pathlib import Path
-from typing import Annotated
+from typing import Optional
 
 from .experiments import press_no_air, press_sticky_air, efficiency
-from . import build
-from . import config
+from ratel_helper import config
 from . import sweep
-from .flux import machines
 
 
 custom_theme = Theme({
@@ -33,19 +31,19 @@ app = typer.Typer()
 
 @app.callback()
 def main(
-    ratel_dir: Path = None,
-    output_dir: Path = None,
-    scratch_dir: Path = None,
+    ratel_dir: Optional[Path] = None,
+    output_dir: Optional[Path] = None,
+    scratch_dir: Optional[Path] = None,
 ):
     """
     Ratel iMPM Experiments
     """
     if ratel_dir is not None:
-        config.set('RATEL_DIR', ratel_dir.resolve())
+        config.set('RATEL_DIR', f"{ratel_dir.resolve()}")
     if output_dir is not None:
-        config.set('OUTPUT_DIR', output_dir.resolve())
+        config.set('OUTPUT_DIR', f"{output_dir.resolve()}")
     if scratch_dir is not None:
-        config.set('SCRATCH_DIR', scratch_dir.resolve())
+        config.set('SCRATCH_DIR', f"{scratch_dir.resolve()}")
 
 
 # Press experiments
@@ -57,8 +55,6 @@ perf_app = typer.Typer()
 # Performance experiments
 app.add_typer(perf_app, name="performance", help="Performance experiments")
 perf_app.add_typer(efficiency.app, name="efficiency", help=efficiency.__doc__)
-app.add_typer(config.app, name="config")
-app.add_typer(build.app, name="build")
 app.add_typer(sweep.app, name="sweep")
 
 

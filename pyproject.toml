@@ -1,31 +1,34 @@
 [project]
-name = "ratel-impm-press"
-version = "0.1.21"
-description = "Experiment Scripts for Ratel Implicit Material Point Method"
+name = "ratel-runner"
+version = "0.2.0"
+description = "Utilities for building and running the Ratel finite element library"
 authors = [
     {name = "Zach Atkins",email = "zach.atkins@colorado.edu"}
 ]
 license = {text = "MIT"}
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.9,<4.0"
 dependencies = [
-    "typer (>=0.15.2,<0.16.0)",
-    "pyyaml (>=6.0.2,<7.0.0)",
-    "pandas (>=2.2.3,<3.0.0)",
+    "ratel-helper",
+    "typer<1.0.0,>=0.15.2",
 ]
+optional-dependencies = { mpm = ["ratel-impm"] }
 
 [project.scripts]
-ratel-impm = "ratel_impm_press.main:app"
+ratel-runner = "ratel_runner.main:app"
 
 [build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["uv_build>=0.8.0,<0.9.0"]
+build-backend = "uv_build"
 
-[tool.poetry]
-packages = [{include = "ratel_impm_press", from = "src"}]
+[tool.uv.build-backend]
+includes = ["src/ratel_runner"]
+module-name = 'ratel_runner'
 
-[tool.poetry.group.gmsh]
-optional = true
+[tool.uv.workspace]
+members = ["packages/*"]
 
-[tool.poetry.group.gmsh.dependencies]
-gmsh = "^4.13.1"
+
+[tool.uv.sources]
+ratel-helper = { workspace = true }
+ratel-impm = { workspace = true }

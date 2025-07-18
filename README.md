@@ -1,22 +1,33 @@
-# Ratel Implicit Material Point Method (iMPM) Experiments
+# Ratel Runner
 
 Questions, comments, or concerns? Contact Zach Atkins or leave an issue.
 
 
 ## Installation
+
+### UV (Recommended)
+
+First, install [uv](https://github.com/astral-sh/uv), an open-source Python package manager written in Rust.
+Installing `uv` does not require root privileges and takes only a few seconds.
+
+Then, you can either run `ratel-runner` without installing or install it using `uv`:
+```
+uvx --from git+https://github.com/zatkins-dev/Ratel-iMPM-Press.git ratel-runner
+uv tool install git+https://github.com/zatkins-dev/Ratel-iMPM-Press.git ratel-runner
+```
+
+If you want to run iMPM experiments, add the `--with mpm` flag.
+
+### Virtual Environment
 If building on Tioga or Tuolumne, ensure you have a new enough Python version:
 ```bash
 ml +cray-python
-```
-For Lassen, instead use:
-```bash
 ```
 
 To install the python package, run:
 ```bash
 pip install --user --upgrade git+https://github.com/zatkins-dev/Ratel-iMPM-Press.git
 ```
-
 
 On Lassen, you should first make a virtual environment and ensure new enough compilers are set for building `numpy`:
 ```bash
@@ -28,7 +39,7 @@ On Lassen, you should first make a virtual environment and ensure new enough com
 	python -m virtualenv .venv
 	# activate virtual environment
 	. .venv/bin/activate
-	# install ratel-impm-press
+	# install ratel-runner
 	CC=gcc CXX=g++ pip install --upgrade git+https://github.com/zatkins-dev/Ratel-iMPM-Press.git
 ```
 
@@ -141,14 +152,14 @@ For Lassen, the scratch directory defaults to the `gpfs1` parallel filesystem:
 Set an appropriate `SCRATCH_DIR` and `OUTPUT_DIR`, e.g.
 ```sh
 # on supported machines, defaults to /parallel/filesystem/path/$USER/ratel-scratch
-ratel-impm config set SCRATCH_DIR /p/lustre5/$USER/ratel-scratch
+ratel-runner config set SCRATCH_DIR /p/lustre5/$USER/ratel-scratch
 # typically defaults to the directory where commands are run
-ratel-impm config set OUTPUT_DIR /usr/workspace/$USER/ratel-impm-press
+ratel-runner config set OUTPUT_DIR /usr/workspace/$USER/ratel-runner-press
 ```
 If you are running on a supported machine, these configuration variables are *optional*.
 If you are building on an unsupported machine, you must also set `PETSC_CONFIG` to the path to a Python PETSc configuration script:
 ```sh
-ratel-impm config set PETSC_CONFIG /path/to/reconfigure.py
+ratel-runner config set PETSC_CONFIG /path/to/reconfigure.py
 ```
 Examples can be found in the [PETSc repository](https://gitlab.com/petsc/petsc/-/tree/main/config/examples).
 
@@ -156,16 +167,16 @@ If you are building on a machine with job scheduling, you should now acquire an 
 
 Then, Ratel and its dependencies can be built via:
 ```sh
-ratel-impm build ratel
+ratel-runner build ratel
 ```
 
 #### Configuration Variables
 The following configuration variables are used to build Ratel and run experiments.
-The preferred way to set configuration variables is through the `ratel-impm config` command.
+The preferred way to set configuration variables is through the `ratel-runner config` command.
 ```console
-> ratel-impm config --help
+> ratel-runner config --help
 
- Usage: ratel-impm config [OPTIONS] COMMAND [ARGS]...
+ Usage: ratel-runner config [OPTIONS] COMMAND [ARGS]...
 
  Read/write values in the application configuration file.
 
@@ -195,11 +206,11 @@ The list of relevant variables is given below.
 | `RATEL_DIR`   | Location of cloned Ratel repository. This can be an existing repository, or Ratel will be cloned to this directory if it does not exist. | `$SCRATCH_DIR/build/ratel` |
 
 
-## Running experiments
+## Running Implicit Material Point Method (iMPM) Experiments
 
-Experiments are run through the `ratel-impm press` command, use the help flag for a list of options.
+Experiments are run through the `ratel-runner press` command, use the help flag for a list of options.
 ```sh
-ratel-impm press --help
+ratel-runner press --help
 ```
 
 ### Press - Sticky Air
@@ -207,8 +218,8 @@ The "sticky-air" experiment models voids as a soft, perfectly compressible solid
 The experiment requires the path to the voxel data file, the characteristic length (in mm), and the desired load fraction.
 See the help pages for the `run` and `flux-run` subcommands for other options:
 ```sh
-ratel-impm press sticky-air run --help
-ratel-impm press sticky-air flux-run --help
+ratel-runner press sticky-air run --help
+ratel-runner press sticky-air flux-run --help
 ```
 
 Note: The `flux-run` subcommand will only launch a batch job *after* the background mesh is generated.
@@ -218,17 +229,17 @@ For example, to run an experiment with CL 0.02 and load fraction 0.4:
 # Get allocation
 flux alloc --queue=pdebug --setattr=thp=always --setattr=hugepages=512GB -x -N1 -n1 -t 1h
 # Pre-generate mesh (only use 1 process, since we aren't launching the job)
-ratel-impm press sticky-air flux-run /path/to/voxel/data 0.02 0.4 -n 1 --dry-run
+ratel-runner press sticky-air flux-run /path/to/voxel/data 0.02 0.4 -n 1 --dry-run
 # Return allocation
 exit
 
 # Submit job to queue using generated mesh (note, use 16 processes)
-ratel-impm press sticky-air flux-run /path/to/voxel/data 0.02 0.4 -n 16
+ratel-runner press sticky-air flux-run /path/to/voxel/data 0.02 0.4 -n 16
 ```
 
 Alternate material properties can be provided as additional flags to the `flux-run` command.
 For example, to change the fracture toughness of the `binder` material, you could run
 ```sh
-ratel-impm press sticky-air flux-run /path/to/voxel/data 0.02 0.4 -n 1 --mpm_binder_fracture_toughness 1e2
+ratel-runner press sticky-air flux-run /path/to/voxel/data 0.02 0.4 -n 1 --mpm_binder_fracture_toughness 1e2
 ```
 Note: an extra `-` is required when compared to executing Ratel directly.
