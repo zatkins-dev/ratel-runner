@@ -4,20 +4,22 @@ import typer
 from typing import Optional, Annotated
 import pandas as pd
 
+from ratel_helper.experiment import ExperimentConfig, LogViewType
+from ratel_helper.flux import flux, machines
+from ratel_helper import config
+
 from .press_common import get_mesh, DIE_HEIGHT, set_diagnostic_options
-from ..experiment import ExperimentConfig, LogViewType
-from ..flux import flux, machines
 from ..sweep import load_sweep_specification
 from .. import local
-from .. import config
 
 
-__doc__ = "Die press experiment using voxelized CT data and a synthetic mesh"
-_material_config_file = importlib.resources.files('ratel_impm_press') / 'yml' / 'Material_Options_Voxel.yml'
-_solver_config_file = importlib.resources.files('ratel_impm_press') / 'yml' / 'Ratel_Solver_Options.yml'
+_material_config_file = importlib.resources.files(__package__ or '') / 'yml' / 'Material_Options_Voxel.yml'
+_solver_config_file = importlib.resources.files(__package__ or '') / 'yml' / 'Ratel_Solver_Options.yml'
 
 
 class PressNoAirExperiment(ExperimentConfig):
+    """Die press experiment using voxelized CT data and a synthetic mesh"""
+
     def __init__(self, voxel_data: Path, characteristic_length: float,
                  load_fraction: float = 0.4, clamp_top: bool = True):
         if not voxel_data.exists():
@@ -36,7 +38,7 @@ class PressNoAirExperiment(ExperimentConfig):
         base_config = _solver_config_file.read_text() + '\n' + _material_config_file.read_text()
         base_name = Path(__file__).stem.replace('_', '-')
         name = f"{base_name}-CL{characteristic_length}-LF{load_fraction}{'-clamped' if clamp_top else ''}"
-        super().__init__(name, __doc__, base_config)
+        super().__init__(name, self.__doc__, base_config)
 
     @property
     def mesh_options(self) -> str:
@@ -69,6 +71,8 @@ class PressNoAirExperiment(ExperimentConfig):
         return output
 
 
+__doc__ = PressNoAirExperiment.__doc__
+
 app = typer.Typer()
 
 
@@ -93,7 +97,7 @@ def run(
         help="Interval to save projected diagnostic quantities, or zero to disable", min=0)] = 200,
     save: Annotated[bool, typer.Option(
         help="Global flag to enable or disable writing diagnostics. If False, nothing will be written.")] = True,
-    out: Path = None,
+    out: Optional[Path] = None,
     dry_run: bool = False
 ):
     """Run the experiment in the current shell (blocking)"""
@@ -132,7 +136,7 @@ def flux_run(
     load_fraction: Annotated[float, typer.Argument(min=0.0, max=1.0)] = 0.4,
     clamp_top: bool = True,
     num_processes: Annotated[int, typer.Option("-n", min=1)] = 1,
-    max_time: Annotated[str, typer.Option("-t", "--max-time")] = None,
+    max_time: Annotated[Optional[str], typer.Option("-t", "--max-time")] = None,
     log_view: Optional[LogViewType] = None,
     machine: Optional[machines.Machine] = None,
     save_forces: Annotated[int, typer.Option(help="Interval to save surface forces, or zero to disable", min=0)] = 1,
@@ -189,7 +193,7 @@ def flux_sweep(
     load_fraction: Annotated[float, typer.Argument(min=0.0, max=1.0)] = 0.4,
     clamp_top: bool = True,
     num_processes: Annotated[int, typer.Option("-n", min=1)] = 1,
-    max_time: Annotated[str, typer.Option("-t", "--max-time")] = None,
+    max_time: Annotated[Optional[str], typer.Option("-t", "--max-time")] = None,
     log_view: Optional[LogViewType] = None,
     machine: Optional[machines.Machine] = None,
     save_forces: Annotated[int, typer.Option(help="Interval to save surface forces, or zero to disable", min=0)] = 1,
@@ -247,7 +251,7 @@ def flux_uq(
     load_fraction: Annotated[float, typer.Argument(min=0.0, max=1.0)] = 0.4,
     clamp_top: bool = True,
     num_processes: Annotated[int, typer.Option("-n", min=1)] = 1,
-    max_time: Annotated[str, typer.Option("-t", "--max-time")] = None,
+    max_time: Annotated[Optional[str], typer.Option("-t", "--max-time")] = None,
     log_view: Optional[LogViewType] = None,
     machine: Optional[machines.Machine] = None,
     save_forces: Annotated[int, typer.Option(help="Interval to save surface forces, or zero to disable", min=0)] = 1,

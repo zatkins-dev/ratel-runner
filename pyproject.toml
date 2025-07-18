@@ -1,31 +1,63 @@
 [project]
-name = "ratel-impm-press"
-version = "0.1.21"
-description = "Experiment Scripts for Ratel Implicit Material Point Method"
+name = "ratel-runner"
+version = "0.2.0"
+description = "Utilities for building and running the Ratel finite element library"
 authors = [
     {name = "Zach Atkins",email = "zach.atkins@colorado.edu"}
 ]
-license = {text = "MIT"}
+license = "MIT"
+license-files = ["LICEN[CS]E*"]
 readme = "README.md"
-requires-python = ">=3.10"
-dependencies = [
-    "typer (>=0.15.2,<0.16.0)",
-    "pyyaml (>=6.0.2,<7.0.0)",
-    "pandas (>=2.2.3,<3.0.0)",
+keywords = ["Ratel", "finite elements", "scientific computing", "HPC", "material point method", "mpm"]
+classifiers = [
+  # How mature is this project? Common values are
+  #   3 - Alpha
+  #   4 - Beta
+  #   5 - Production/Stable
+  "Development Status :: 3 - Alpha",
+
+  # Indicate who your project is intended for
+  "Intended Audience :: Developers",
+  "Topic :: Software Development :: Build Tools",
+
+  # Specify the Python versions you support here.
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
 ]
 
+requires-python = ">=3.9,<4.0"
+dependencies = [
+    "ratel-helper",
+    "typer<1.0.0,>=0.15.2",
+]
+optional-dependencies = { mpm = ["ratel-impm"] }
+
+[project.urls]
+# Homepage = "https://example.com"
+# Documentation = "https://readthedocs.org"
+Repository = "https://github.com/zatkins-dev/ratel-runner"
+Issues = "https://github.com/zatkins-dev/ratel-runner/issues"
+# Changelog = "https://github.com/me/spam/blob/master/CHANGELOG.md"
+
 [project.scripts]
-ratel-impm = "ratel_impm_press.main:app"
+ratel-runner = "ratel_runner.main:app"
 
 [build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["uv_build>=0.8.0,<0.9.0"]
+build-backend = "uv_build"
 
-[tool.poetry]
-packages = [{include = "ratel_impm_press", from = "src"}]
+[tool.uv.build-backend]
+includes = ["src/ratel_runner"]
+module-name = 'ratel_runner'
 
-[tool.poetry.group.gmsh]
-optional = true
+[tool.uv.workspace]
+members = ["packages/*"]
 
-[tool.poetry.group.gmsh.dependencies]
-gmsh = "^4.13.1"
+
+[tool.uv.sources]
+ratel-helper = { workspace = true }
+ratel-impm = { workspace = true }

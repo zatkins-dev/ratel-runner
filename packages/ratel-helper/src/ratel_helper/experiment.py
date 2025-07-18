@@ -28,9 +28,9 @@ class ExperimentConfig(ABC):
     _base_config: str
     _logview: Optional[LogViewType]
 
-    def __init__(self, name: str, description: str, base_config: str):
+    def __init__(self, name: str, description: Optional[str], base_config: str):
         self._name = name
-        self._description = description
+        self._description = description or ''
         self._base_config = base_config
         self._logview = None
         self._user_options = dict()

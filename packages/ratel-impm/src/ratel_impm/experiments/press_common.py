@@ -3,9 +3,10 @@ import rich
 from rich.syntax import Syntax
 from math import ceil
 from multiprocessing import cpu_count
+import gmsh
 
-from .. import config
-from ..experiment import ExperimentConfig
+from ratel_helper import config
+from ratel_helper.experiment import ExperimentConfig
 
 console = rich.get_console()
 print = console.print
@@ -18,7 +19,7 @@ DIE_CENTER = [2.65695759, 2.65695759, 0]  # [2656.95759, 2656.95759, 0] um, 315,
 
 
 def set_diagnostic_options(experiment: ExperimentConfig, save_forces: int, save_strain_energy: int, save_swarm: int, save_solution: int,
-                           save_diagnostics: int, save: bool) -> dict:
+                           save_diagnostics: int, save: bool):
     """
     Set diagnostic options for the experiment.
 
@@ -62,8 +63,6 @@ def get_mesh(characteristic_length: float, voxel_data: Path,
 
     :return: A dictionary of mesh options for the experiment configuration.
     """
-    import gmsh
-
     mesh_file: Path = generate_mesh(characteristic_length, voxel_data, scratch_dir)
 
     options: str = '\n'.join([
