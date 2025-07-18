@@ -56,16 +56,19 @@ app.add_typer(config.app, name="config")
 app.add_typer(build.app, name="build")
 
 if HAVE_MPM:
+    mpm_app = typer.Typer()
+    app.add_typer(mpm_app, name="mpm", help="Run iMPM Experiments")
+
     # Press experiments
     press_app = typer.Typer()
-    app.add_typer(press_app, name="press", help="Press consolidation experiments")
+    mpm_app.add_typer(press_app, name="press", help="Press consolidation experiments")
     press_app.add_typer(press_sticky_air.app, name="sticky-air", help=press_sticky_air.__doc__)
     press_app.add_typer(press_no_air.app, name="no-air", help=press_no_air.__doc__)
     perf_app = typer.Typer()
     # Performance experiments
-    app.add_typer(perf_app, name="performance", help="Performance experiments")
+    mpm_app.add_typer(perf_app, name="performance", help="Performance experiments")
     perf_app.add_typer(efficiency.app, name="efficiency", help=efficiency.__doc__)
-    app.add_typer(sweep.app, name="sweep")
+    mpm_app.add_typer(sweep.app, name="sweep")
 
 if __name__ == "__main__":
     app()
