@@ -13,8 +13,8 @@ from ..sweep import load_sweep_specification
 from .. import local
 
 
-_material_config_file = importlib.resources.files('ratel_impm_press') / 'yml' / 'Material_Options_Voxel.yml'
-_solver_config_file = importlib.resources.files('ratel_impm_press') / 'yml' / 'Ratel_Solver_Options.yml'
+_material_config_file = importlib.resources.files(__package__ or '') / 'yml' / 'Material_Options_Voxel.yml'
+_solver_config_file = importlib.resources.files(__package__ or '') / 'yml' / 'Ratel_Solver_Options.yml'
 
 
 class PressNoAirExperiment(ExperimentConfig):

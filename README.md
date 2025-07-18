@@ -154,7 +154,7 @@ Set an appropriate `SCRATCH_DIR` and `OUTPUT_DIR`, e.g.
 # on supported machines, defaults to /parallel/filesystem/path/$USER/ratel-scratch
 ratel-runner config set SCRATCH_DIR /p/lustre5/$USER/ratel-scratch
 # typically defaults to the directory where commands are run
-ratel-runner config set OUTPUT_DIR /usr/workspace/$USER/ratel-runner-press
+ratel-runner config set OUTPUT_DIR /usr/workspace/$USER/ratel-runner
 ```
 If you are running on a supported machine, these configuration variables are *optional*.
 If you are building on an unsupported machine, you must also set `PETSC_CONFIG` to the path to a Python PETSc configuration script:

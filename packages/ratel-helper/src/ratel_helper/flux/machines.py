@@ -8,6 +8,8 @@ from rich import print
 
 from ..import config
 
+detection_warning_printed = False
+
 
 class GPUBackend(Enum):
     ROCM = 'rocm'
@@ -125,6 +127,7 @@ def detect_gpu_backend() -> GPUBackend:
 
 def detect_machine() -> Machine | None:
     """Detect the machine that the script is running on."""
+    global detection_warning_printed
     hostname = platform.node()
     if hostname.startswith('tuolumne'):
         return Machine.TUOLUMNE
@@ -132,7 +135,9 @@ def detect_machine() -> Machine | None:
         return Machine.TIOGA
     elif hostname.startswith('lassen'):
         return Machine.LASSEN
-    print(f'[warning]Could not detect machine from hostname: {hostname}, are you connected to the right machine?[/]')
+    if not detection_warning_printed:
+        print(f'[warning]Could not detect machine from hostname: {hostname}, are you connected to the right machine?')
+        detection_warning_printed = True
     return None
 
 
