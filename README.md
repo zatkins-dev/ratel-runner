@@ -16,7 +16,11 @@ uvx --from git+https://github.com/zatkins-dev/Ratel-iMPM-Press.git ratel-runner
 uv tool install git+https://github.com/zatkins-dev/Ratel-iMPM-Press.git ratel-runner
 ```
 
-If you want to run iMPM experiments, add the `--with mpm` flag.
+If you want to run iMPM experiments, specify the `[mpm]` optional dependency:
+```
+uvx --from git+https://github.com/zatkins-dev/Ratel-iMPM-Press.git[mpm] ratel-runner
+uv tool install git+https://github.com/zatkins-dev/Ratel-iMPM-Press.git[mpm] ratel-runner
+```
 
 ### Virtual Environment
 If building on Tioga or Tuolumne, ensure you have a new enough Python version:

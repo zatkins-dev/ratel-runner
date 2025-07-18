@@ -6,5 +6,11 @@ readme = "README.md"
 requires-python = ">=3.9, <4.0"
 dependencies = ["ratel-helper", "gmsh<5.0.0,>=4.13.1", "pandas<3.0.0,>=2.2.3", "pyyaml>=6.0.2,<7.0.0"]
 
+
+[tool.uv.build-backend]
+includes = ["src/ratel_impm"]
+module-name = 'ratel_impm'
+
+
 [project.scripts]
 ratel-impm = "ratel_impm.main:app"

@@ -1,10 +1,14 @@
 [project]
 name = "ratel-helper"
 version = "0.1.0"
-description = "Add your description here"
+description = "Helper tools for building and running Ratel"
 readme = "README.md"
 requires-python = ">=3.7, <4.0"
 dependencies = []
+
+[tool.uv.build-backend]
+includes = ["src/ratel_helper"]
+module-name = 'ratel_helper'
 
 [project.scripts]
 ratel-helper = "ratel_helper.main:app"
