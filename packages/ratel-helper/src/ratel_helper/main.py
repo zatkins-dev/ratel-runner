@@ -35,7 +35,7 @@ def main(
     scratch_dir: Optional[Path] = None,
 ):
     """
-    Ratel iMPM Experiments
+    Ratel Build and Run Helper
     """
     if ratel_dir is not None:
         config.set('RATEL_DIR', f'{ratel_dir.resolve()}')
