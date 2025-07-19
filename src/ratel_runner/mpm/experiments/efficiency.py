@@ -1,8 +1,9 @@
 from pathlib import Path
 import typer
 from typing import Annotated, Optional
-from ratel_helper.flux import machines, flux
-from ratel_helper.experiment import ExperimentConfig, LogViewType
+
+from ...helper.flux import machines, flux
+from ...helper.experiment import ExperimentConfig, LogViewType
 
 
 _base_side_length = 0.1
@@ -108,6 +109,7 @@ class EfficiencyForcingExperiment(ExperimentConfig):
             output += "\n[h2]User Options[/]\n"
             output += "\n".join([f"  • {key}: {value}" for key, value in self.user_options.items()])
         return output
+
 
 __doc__ = EfficiencyForcingExperiment.__doc__
 

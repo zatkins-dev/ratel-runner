@@ -8,13 +8,6 @@ resolution-markers = [
     "python_full_version < '3.10'",
 ]
 
-[manifest]
-members = [
-    "ratel-helper",
-    "ratel-impm",
-    "ratel-runner",
-]
-
 [[package]]
 name = "click"
 version = "8.1.8"
@@ -411,47 +404,25 @@ wheels = [
 ]
 
 [[package]]
-name = "ratel-helper"
-version = "0.2.0"
-source = { editable = "packages/ratel-helper" }
-
-[[package]]
-name = "ratel-impm"
-version = "0.2.0"
-source = { editable = "packages/ratel-impm" }
-dependencies = [
-    { name = "gmsh" },
-    { name = "pandas" },
-    { name = "pyyaml" },
-    { name = "ratel-helper" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "gmsh", specifier = ">=4.13.1,<5.0.0" },
-    { name = "pandas", specifier = ">=2.2.3,<3.0.0" },
-    { name = "pyyaml", specifier = ">=6.0.2,<7.0.0" },
-    { name = "ratel-helper", editable = "packages/ratel-helper" },
-]
-
-[[package]]
 name = "ratel-runner"
-version = "0.2.0"
+version = "0.2.1"
 source = { editable = "." }
 dependencies = [
-    { name = "ratel-helper" },
     { name = "typer" },
 ]
 
 [package.optional-dependencies]
 mpm = [
-    { name = "ratel-impm" },
+    { name = "gmsh" },
+    { name = "pandas" },
+    { name = "pyyaml" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "ratel-helper", editable = "packages/ratel-helper" },
-    { name = "ratel-impm", marker = "extra == 'mpm'", editable = "packages/ratel-impm" },
+    { name = "gmsh", marker = "extra == 'mpm'", specifier = ">=4.13.1,<5.0.0" },
+    { name = "pandas", marker = "extra == 'mpm'", specifier = ">=2.2.3,<3.0.0" },
+    { name = "pyyaml", marker = "extra == 'mpm'", specifier = ">=6.0.2,<7.0.0" },
     { name = "typer", specifier = ">=0.15.2,<1.0.0" },
 ]
 provides-extras = ["mpm"]

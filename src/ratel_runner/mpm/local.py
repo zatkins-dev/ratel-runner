@@ -5,8 +5,8 @@ import subprocess
 import datetime
 from typing import Optional
 
-from ratel_helper import config
-from ratel_helper.experiment import ExperimentConfig
+from ..helper import config
+from ..helper.experiment import ExperimentConfig
 
 
 def run(experiment: ExperimentConfig, num_processes: int = 1, ratel_dir: Optional[Path] = None,

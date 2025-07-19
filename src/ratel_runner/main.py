@@ -6,11 +6,11 @@ from rich.theme import Theme
 from pathlib import Path
 from typing import Optional
 
-from ratel_helper import build, config
+from .helper import build, config
 
 try:
-    from ratel_impm.experiments import press_no_air, press_sticky_air, efficiency
-    from ratel_impm import sweep
+    from .mpm.experiments import press_no_air, press_sticky_air, efficiency
+    from .mpm import sweep
     HAVE_MPM = True
 except ImportError:
     HAVE_MPM = False

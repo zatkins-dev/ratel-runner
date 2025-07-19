@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Optional
 
 from .experiments import press_no_air, press_sticky_air, efficiency
-from ratel_helper import config
+from ..helper import config
 from . import sweep
 
 

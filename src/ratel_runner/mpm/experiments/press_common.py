@@ -5,8 +5,8 @@ from math import ceil
 from multiprocessing import cpu_count
 import gmsh
 
-from ratel_helper import config
-from ratel_helper.experiment import ExperimentConfig
+from ...helper import config
+from ...helper.experiment import ExperimentConfig
 
 console = rich.get_console()
 print = console.print

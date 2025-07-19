@@ -1,6 +1,6 @@
 [project]
 name = "ratel-runner"
-version = "0.2.0"
+version = "0.2.1"
 description = "Utilities for building and running the Ratel finite element library"
 authors = [
     {name = "Zach Atkins",email = "zach.atkins@colorado.edu"}
@@ -31,10 +31,9 @@ classifiers = [
 
 requires-python = ">=3.9,<4.0"
 dependencies = [
-    "ratel-helper",
     "typer<1.0.0,>=0.15.2",
 ]
-optional-dependencies = { mpm = ["ratel-impm"] }
+optional-dependencies = { mpm = ["gmsh<5.0.0,>=4.13.1", "pandas<3.0.0,>=2.2.3", "pyyaml>=6.0.2,<7.0.0"] }
 
 [project.urls]
 # Homepage = "https://example.com"
@@ -54,10 +53,8 @@ build-backend = "uv_build"
 includes = ["src/ratel_runner"]
 module-name = 'ratel_runner'
 
-[tool.uv.workspace]
-members = ["packages/*"]
-
-
-[tool.uv.sources]
-ratel-helper = { workspace = true }
-ratel-impm = { workspace = true }
+[[tool.uv.index]]
+name = "testpypi"
+url = "https://test.pypi.org/simple/"
+publish-url = "https://test.pypi.org/legacy/"
+explicit = true

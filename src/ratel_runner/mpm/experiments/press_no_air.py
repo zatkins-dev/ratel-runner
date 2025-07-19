@@ -4,17 +4,17 @@ import typer
 from typing import Optional, Annotated
 import pandas as pd
 
-from ratel_helper.experiment import ExperimentConfig, LogViewType
-from ratel_helper.flux import flux, machines
-from ratel_helper import config
+from ...helper.experiment import ExperimentConfig, LogViewType
+from ...helper.flux import flux, machines
+from ...helper import config
 
 from .press_common import get_mesh, DIE_HEIGHT, set_diagnostic_options
 from ..sweep import load_sweep_specification
 from .. import local
 
 
-_material_config_file = importlib.resources.files(__package__ or '') / 'yml' / 'Material_Options_Voxel.yml'
-_solver_config_file = importlib.resources.files(__package__ or '') / 'yml' / 'Ratel_Solver_Options.yml'
+_material_config_file = importlib.resources.files(__package__ or '') / 'mpm' / 'yml' / 'Material_Options_Voxel.yml'
+_solver_config_file = importlib.resources.files(__package__ or '') / 'mpm' / 'yml' / 'Ratel_Solver_Options.yml'
 
 
 class PressNoAirExperiment(ExperimentConfig):
