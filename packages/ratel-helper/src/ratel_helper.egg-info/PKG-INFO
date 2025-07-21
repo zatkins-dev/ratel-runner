@@ -1,6 +1,0 @@
-Metadata-Version: 2.4
-Name: ratel-helper
-Version: 0.2.0
-Summary: Helper tools for building and running Ratel
-Requires-Python: <4.0,>=3.7
-Description-Content-Type: text/markdown
