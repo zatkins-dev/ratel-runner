@@ -3,9 +3,10 @@ Utilities for converting FLUID format Job IDs (see Flux RFC 19)
 """
 
 from enum import Enum
-from functools import reduce
 
 from .mnemonicode import mnencode, mndecode
+
+__all__ = ["fluid_encode", "fluid_decode", "FLUIDEncoding", "BASE58", "HEX", "DOTHEX", "WORDS", "DECIMAL",]
 
 
 class FLUIDParseError(RuntimeError):
@@ -21,10 +22,25 @@ class FLUIDEncoding(Enum):
     DECIMAL = 4
 
 
+BASE58 = FLUIDEncoding.BASE58
+HEX = FLUIDEncoding.HEX
+DOTHEX = FLUIDEncoding.DOTHEX
+WORDS = FLUIDEncoding.WORDS
+DECIMAL = FLUIDEncoding.DECIMAL
+
+
 BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
 
 
-def base58encode(id: int):
+def base58encode(id: int) -> str:
+    """Encode an integer into a Base58 string
+
+    Args:
+        id (int): Integer to encode
+
+    Returns:
+        str: Encoded string
+    """
     encoded_chars = []
     while id > 0:
         id, rem = divmod(id, 58)
@@ -32,7 +48,15 @@ def base58encode(id: int):
     return ''.join(reversed(encoded_chars))
 
 
-def base58decode(s: str):
+def base58decode(s: str) -> int:
+    """Decode a Base58 string into an integer
+
+    Args:
+        s (str): Encoded string
+
+    Returns:
+        int: Computed integer representation
+    """
     if s.startswith('f') or s.startswith('ƒ'):
         s = s[1:]
     id = 0
@@ -43,7 +67,15 @@ def base58decode(s: str):
     return id
 
 
-def _guess_encoding(s: str):
+def _guess_encoding(s: str) -> FLUIDEncoding:
+    """Determine the FLUID representation type
+
+    Args:
+        s (str): Encoded FLUID
+
+    Returns:
+        FLUIDEncoding: Type of encoding for `s`
+    """
     if '.' in s:
         return FLUIDEncoding.DOTHEX
     elif '-' in s:
@@ -65,9 +97,9 @@ def fluid_encode(id: int, encoding: FLUIDEncoding = FLUIDEncoding.BASE58):
         sections = [0, 0, 0, 0]
         for i in range(4):
             id, sections[3 - i] = divmod(id, 65536)
-        return '.'.join(f'{s:0>4}' for s in sections)
+        return '.'.join(f'{s:0>4x}' for s in sections)
     elif encoding == FLUIDEncoding.WORDS:
-        return '-'.join('-'.join(t for t in tup) for tup in mnencode(id.to_bytes()))
+        return '--'.join('-'.join(t for t in tup) for tup in mnencode(id.to_bytes(8, 'little')))
     elif encoding == FLUIDEncoding.DECIMAL:
         return f'{id}'
 
@@ -86,7 +118,8 @@ def fluid_decode(s: str):
             id += mult * int(dword, 16)
         return id
     elif encoding == FLUIDEncoding.WORDS:
-        return int(mndecode(tuple(g.split('-', 2)) if '-' in g else tuple([g]) for g in s.split('--')))
+        return int.from_bytes(mndecode(tuple(g.split('-', 2))
+                              if '-' in g else tuple([g]) for g in s.split('--')), 'little')
     elif encoding == FLUIDEncoding.DECIMAL:
         return int(s)
     else:
