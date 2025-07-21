@@ -13,8 +13,8 @@ from ..sweep import load_sweep_specification
 from .. import local
 
 
-_material_config_file = importlib.resources.files(__package__ or '') / 'yml' / 'Material_Options_Voxel_Air.yml'
-_solver_config_file = importlib.resources.files(__package__ or '') / 'yml' / 'Ratel_Solver_Options.yml'
+_material_config_file = importlib.resources.files(__package__ or '') / 'yml' / 'press_sticky_air.yml'
+_solver_config_file = importlib.resources.files(__package__ or '') / 'yml' / 'common_solver.yml'
 
 
 class PressStickyAirExperiment(ExperimentConfig):
@@ -98,6 +98,8 @@ def run(
         help="Interval to save projected diagnostic quantities, or zero to disable", min=0)] = 200,
     save: Annotated[bool, typer.Option(
         help="Global flag to enable or disable writing diagnostics. If False, nothing will be written.")] = True,
+    checkpoint: Annotated[int, typer.Option(
+        help="Interval to save checkpoint files for restarting runs, or zero to disable", min=0)] = 20,
     out: Optional[Path] = None,
     dry_run: bool = False
 ):
@@ -117,7 +119,8 @@ def run(
         save_swarm=save_swarm,
         save_solution=save_solution,
         save_diagnostics=save_diagnostics,
-        save=save
+        save=save,
+        checkpoint=checkpoint
     )
     local.run(
         experiment,
@@ -150,6 +153,8 @@ def flux_run(
         help="Interval to save projected diagnostic quantities, or zero to disable", min=0)] = 200,
     save: Annotated[bool, typer.Option(
         help="Global flag to enable or disable writing diagnostics. If False, nothing will be written.")] = True,
+    checkpoint: Annotated[int, typer.Option(
+        help="Interval to save checkpoint files for restarting runs, or zero to disable", min=0)] = 20,
     dry_run: bool = False
 ):
     """Run the experiment using the Flux job scheduler"""
@@ -168,7 +173,8 @@ def flux_run(
         save_swarm=save_swarm,
         save_solution=save_solution,
         save_diagnostics=save_diagnostics,
-        save=save
+        save=save,
+        checkpoint=checkpoint
     )
     script_file, _ = flux.generate(
         experiment,
@@ -207,6 +213,8 @@ def flux_sweep(
         help="Interval to save projected diagnostic quantities, or zero to disable", min=0)] = 200,
     save: Annotated[bool, typer.Option(
         help="Global flag to enable or disable writing diagnostics. If False, nothing will be written.")] = True,
+    checkpoint: Annotated[int, typer.Option(
+        help="Interval to save checkpoint files for restarting runs, or zero to disable", min=0)] = 20,
     yes: Annotated[bool, typer.Option('-y')] = False,
     dry_run: bool = False,
 ):
@@ -227,7 +235,8 @@ def flux_sweep(
         save_swarm=save_swarm,
         save_solution=save_solution,
         save_diagnostics=save_diagnostics,
-        save=save
+        save=save,
+        checkpoint=checkpoint
     )
     flux.sweep(
         experiment,
@@ -265,6 +274,8 @@ def flux_uq(
         help="Interval to save projected diagnostic quantities, or zero to disable", min=0)] = 200,
     save: Annotated[bool, typer.Option(
         help="Global flag to enable or disable writing diagnostics. If False, nothing will be written.")] = True,
+    checkpoint: Annotated[int, typer.Option(
+        help="Interval to save checkpoint files for restarting runs, or zero to disable", min=0)] = 20,
     yes: Annotated[bool, typer.Option('-y')] = False,
     dry_run: bool = False,
 ):
@@ -285,7 +296,8 @@ def flux_uq(
         save_swarm=save_swarm,
         save_solution=save_solution,
         save_diagnostics=save_diagnostics,
-        save=save
+        save=save,
+        checkpoint=checkpoint
     )
     flux.uq(
         experiment,

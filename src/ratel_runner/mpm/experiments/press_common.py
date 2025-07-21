@@ -19,7 +19,7 @@ DIE_CENTER = [2.65695759, 2.65695759, 0]  # [2656.95759, 2656.95759, 0] um, 315,
 
 
 def set_diagnostic_options(experiment: ExperimentConfig, save_forces: int, save_strain_energy: int, save_swarm: int, save_solution: int,
-                           save_diagnostics: int, save: bool):
+                           save_diagnostics: int, save: bool, checkpoint: int) -> None:
     """
     Set diagnostic options for the experiment.
 
@@ -29,7 +29,11 @@ def set_diagnostic_options(experiment: ExperimentConfig, save_forces: int, save_
     :param save_solution: Whether to save solution data.
     :param save_diagnostics: Whether to save diagnostics.
     :param save_all: Whether to save all data.
+    :param checkpoint: The interval at which to save checkpoint files.
     """
+    if checkpoint > 0:
+        experiment.diagnostic_options["ts_monitor_checkpoint"] = "checkpoint"
+        experiment.diagnostic_options["ts_monitor_checkpoint_interval"] = checkpoint
     if not save:
         return
     if save_forces > 0:

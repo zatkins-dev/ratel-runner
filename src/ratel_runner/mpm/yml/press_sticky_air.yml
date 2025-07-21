@@ -1,0 +1,41 @@
+orders: 1
+diagnostic_order: 1
+
+method: mpm
+mpm:
+  point_location_type: uniform
+  num_points_per_cell: 27
+  use_voxel:
+  material: grains,binder
+  binder:
+    model: elasticity-mpm-neo-hookean-damage-current
+    E: 500 # MPa
+    nu: 0.25
+    fracture_toughness: 7.4e3 # MPa mm # 0.74 MPa um
+    damage_scaling: 1
+    rho: 1.190e-9 # tonnes/mm^3 # 1.190e-15 kg/um^3
+    use_AT1: false
+    residual_stiffness: 0.01
+    label:
+      value: 1
+  grains:
+    model: elasticity-mpm-neo-hookean-damage-current
+    E: 7500 # MPa
+    nu: 0.25
+    fracture_toughness: 1.830e4 # MPa mm
+    damage_scaling: 1
+    rho: 2.001e-9 # tonnes/mm^3 # 2.001e-15 kg/um^3
+    use_AT1: false
+    residual_stiffness: 0.01
+    label:
+      value: 2
+
+material: dummy
+dummy:
+  model: elasticity-mpm-neo-hookean-damage-current
+  skip_checks:
+  use_AT1: false
+
+surface_force_faces: 1,2
+
+ksp_converged_maxits:
