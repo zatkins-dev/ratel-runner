@@ -11,6 +11,7 @@ from typing import Optional
 from .. import config
 from .machines import Machine, get_machine_config, detect_machine
 from ..experiment import ExperimentConfig
+from .fluid import fluid_encode, fluid_decode, FLUIDEncoding
 
 
 console = get_console()
@@ -23,9 +24,15 @@ def generate(
     max_time: Optional[str] = None,
     link_name: Optional[str] = None,
     output_dir: Optional[Path] = None,
-    additional_args: str = ""
+    additional_args: str = "",
+    original_jobid: Optional[str] = None,
+    dependent_jobid: Optional[str] = None
 ) -> tuple[Path, Path]:
     """Generate a flux script to run the experiments."""
+    is_restart = original_jobid is not None
+    if is_restart and dependent_jobid is None:
+        # assume the orig. job id is the job we depend on
+        dependent_jobid = original_jobid
     ratel_dir = Path(config.get_fallback('RATEL_DIR'))
     scratch_dir = Path(config.get_fallback('SCRATCH_DIR'))
     output_dir = output_dir or Path(config.get_fallback('OUTPUT_DIR', Path.cwd() / 'output'))
@@ -65,7 +72,12 @@ def generate(
         output_link.unlink()
 
     ratel = f'{ratel_dir}/bin/ratel-quasistatic'
-    command = f'{ratel} -ceed {machine_config.ceed_backend} -options_file "$SCRATCH/options.yml" {additional_args}'
+    if is_restart:
+        command = f'{ratel} -ceed {machine_config.ceed_backend} -options_file "$SCRATCH/options.yml" {additional_args}'
+        scratch = f'"{scratch_dir}/{experiment.name}-{fluid_encode(fluid_decode(original_jobid), FLUIDEncoding.DECIMAL)}"'
+    else:
+        command = f'{ratel} -ceed {machine_config.ceed_backend} -options_file "$SCRATCH/options.yml" {additional_args}'
+        scratch = f'"{scratch_dir}/{experiment.name}-$CENTER_JOB_ID"'
 
     script = '\n'.join([
         '#!/bin/bash',
@@ -101,7 +113,7 @@ def generate(
         *[f'export {key}={value}' for key, value in machine_config.defines.items()],
         'ulimit -c unlimited',
         '',
-        f'export SCRATCH="{scratch_dir}/{experiment.name}-$CENTER_JOB_ID"',
+        f'export SCRATCH={scratch}',
         'echo ""',
         'echo "Scratch = $SCRATCH"',
         'echo ""',
