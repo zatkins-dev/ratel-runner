@@ -13,14 +13,14 @@ Installing `uv` does not require root privileges and takes only a few seconds.
 
 Then, you can either run `ratel-runner` without installing or install it using `uv`:
 ```bash
-uvx --from git+https://github.com/zatkins-dev/Ratel-iMPM-Press.git ratel-runner
-uv tool install git+https://github.com/zatkins-dev/Ratel-iMPM-Press.git ratel-runner
+uvx ratel-runner
+uv tool install 'ratel-runner@latest'
 ```
 
 If you want to run iMPM experiments, specify the `[mpm]` optional dependency:
 ```bash
-uvx --from git+https://github.com/zatkins-dev/Ratel-iMPM-Press.git[mpm] ratel-runner
-uv tool install git+https://github.com/zatkins-dev/Ratel-iMPM-Press.git[mpm] ratel-runner
+uvx ratel-runner
+uv tool install 'ratel-runner[mpm]@latest'
 ```
 
 ### Virtual Environment
@@ -31,7 +31,7 @@ ml +cray-python
 
 To install the python package, run:
 ```bash
-pip install --user --upgrade git+https://github.com/zatkins-dev/Ratel-iMPM-Press.git
+pip install --user --upgrade ratel-runner
 ```
 
 On Lassen, you should first make a virtual environment and ensure new enough compilers are set for building `numpy`:
