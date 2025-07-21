@@ -17,7 +17,7 @@ URI = "https://gitlab.com/petsc/petsc.git"
 def get_config(machine: Machine | None) -> str:
     """Get the machine PETSc configuration."""
     if machine is not None and machine != Machine.DEFAULT:
-        return importlib.resources.read_text('ratel_impm_press.build.machines',
+        return importlib.resources.read_text('ratel_runner.helper.build.machines',
                                              f'reconfigure_{machine.value.lower()}.py')
     else:
         raise ValueError(
