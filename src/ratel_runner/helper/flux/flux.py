@@ -115,7 +115,7 @@ def generate(
         '#flux: --setattr=thp=always # Transparent Huge Pages',
         '#flux: -l # Add task rank prefixes to each line of output.',
         ('#flux: --setattr=hugepages=512GB' if machine == Machine.TUOLUMNE else ''),
-        (f'#flux: --dependency=after:{fluid_encode(dependent_jobid)}' if is_restart else ''),  # type: ignore
+        (f'#flux: --dependency=afterany:{fluid_encode(dependent_jobid)}' if is_restart else ''),  # type: ignore
         '',
         'echo "~~~~~~~~~~~~~~~~~~~"',
         'echo "Welcome!"',
@@ -225,7 +225,7 @@ def run(script_path: Path):
         exit(1)
     else:
         print(f"[success]Job submitted with ID {proc.stdout.decode()}[/]")
-        return fluid_decode(proc.stdout.decode())
+        return fluid_decode(proc.stdout.decode().strip())
 
 
 def sweep(

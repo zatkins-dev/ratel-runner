@@ -13,8 +13,8 @@ from ..sweep import load_sweep_specification
 from .. import local
 
 
-_material_config_file = importlib.resources.files(__package__ or '') / 'mpm' / 'yml' / 'press_no_air.yml'
-_solver_config_file = importlib.resources.files(__package__ or '') / 'mpm' / 'yml' / 'common_solver.yml'
+_material_config_file = importlib.resources.files(__package__ or '') / 'yml' / 'press_no_air.yml'
+_solver_config_file = importlib.resources.files(__package__ or '') / 'yml' / 'common_solver.yml'
 
 
 class PressNoAirExperiment(ExperimentConfig):
