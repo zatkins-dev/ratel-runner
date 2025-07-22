@@ -120,7 +120,6 @@ def run(
         save_solution=save_solution,
         save_diagnostics=save_diagnostics,
         save=save,
-        checkpoint=checkpoint
     )
     local.run(
         experiment,
@@ -153,6 +152,7 @@ def flux_run(
         help="Interval to save projected diagnostic quantities, or zero to disable", min=0)] = 200,
     save: Annotated[bool, typer.Option(
         help="Global flag to enable or disable writing diagnostics. If False, nothing will be written.")] = True,
+    max_restarts: Annotated[int, typer.Option(help="Number of restart jobs to enqueue", min=0)] = 0,
     checkpoint: Annotated[int, typer.Option(
         help="Interval to save checkpoint files for restarting runs, or zero to disable", min=0)] = 20,
     dry_run: bool = False
@@ -174,19 +174,26 @@ def flux_run(
         save_solution=save_solution,
         save_diagnostics=save_diagnostics,
         save=save,
-        checkpoint=checkpoint
-    )
-    script_file, _ = flux.generate(
-        experiment,
-        machine=machine,
-        num_processes=num_processes,
-        max_time=max_time,
     )
     if dry_run:
+        script_file, _ = flux.generate(
+            experiment,
+            machine=machine,
+            num_processes=num_processes,
+            max_time=max_time,
+            checkpoint_interval=checkpoint,
+        )
         print(f"Generated script saved to", script_file)
         print("Dry run, exiting.")
     else:
-        flux.run(script_file)
+        flux.submit_series(
+            experiment,
+            machine=machine,
+            num_processes=num_processes,
+            max_time=max_time,
+            checkpoint_interval=checkpoint,
+            max_restarts=max_restarts
+        )
 
 
 @app.command(
@@ -215,6 +222,7 @@ def flux_sweep(
         help="Global flag to enable or disable writing diagnostics. If False, nothing will be written.")] = True,
     checkpoint: Annotated[int, typer.Option(
         help="Interval to save checkpoint files for restarting runs, or zero to disable", min=0)] = 20,
+    max_restarts: Annotated[int, typer.Option(help="Number of restart jobs to enqueue", min=0)] = 0,
     yes: Annotated[bool, typer.Option('-y')] = False,
     dry_run: bool = False,
 ):
@@ -236,7 +244,6 @@ def flux_sweep(
         save_solution=save_solution,
         save_diagnostics=save_diagnostics,
         save=save,
-        checkpoint=checkpoint
     )
     flux.sweep(
         experiment,
@@ -276,6 +283,7 @@ def flux_uq(
         help="Global flag to enable or disable writing diagnostics. If False, nothing will be written.")] = True,
     checkpoint: Annotated[int, typer.Option(
         help="Interval to save checkpoint files for restarting runs, or zero to disable", min=0)] = 20,
+    max_restarts: Annotated[int, typer.Option(help="Number of restart jobs to enqueue", min=0)] = 0,
     yes: Annotated[bool, typer.Option('-y')] = False,
     dry_run: bool = False,
 ):
@@ -297,7 +305,6 @@ def flux_uq(
         save_solution=save_solution,
         save_diagnostics=save_diagnostics,
         save=save,
-        checkpoint=checkpoint
     )
     flux.uq(
         experiment,

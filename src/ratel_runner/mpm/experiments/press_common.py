@@ -5,7 +5,6 @@ from math import ceil
 from multiprocessing import cpu_count
 import gmsh
 
-from ...helper import config
 from ...helper.experiment import ExperimentConfig
 
 console = rich.get_console()
@@ -19,7 +18,7 @@ DIE_CENTER = [2.65695759, 2.65695759, 0]  # [2656.95759, 2656.95759, 0] um, 315,
 
 
 def set_diagnostic_options(experiment: ExperimentConfig, save_forces: int, save_strain_energy: int, save_swarm: int, save_solution: int,
-                           save_diagnostics: int, save: bool, checkpoint: int) -> None:
+                           save_diagnostics: int, save: bool) -> None:
     """
     Set diagnostic options for the experiment.
 
@@ -29,11 +28,7 @@ def set_diagnostic_options(experiment: ExperimentConfig, save_forces: int, save_
     :param save_solution: Whether to save solution data.
     :param save_diagnostics: Whether to save diagnostics.
     :param save_all: Whether to save all data.
-    :param checkpoint: The interval at which to save checkpoint files.
     """
-    if checkpoint > 0:
-        experiment.diagnostic_options["ts_monitor_checkpoint"] = "checkpoint"
-        experiment.diagnostic_options["ts_monitor_checkpoint_interval"] = checkpoint
     if not save:
         return
     if save_forces > 0:
@@ -50,8 +45,8 @@ def set_diagnostic_options(experiment: ExperimentConfig, save_forces: int, save_
         experiment.diagnostic_options["ts_monitor_solution"] = r"cgns:solution_%06d.cgns"
         experiment.diagnostic_options["ts_monitor_solution_interval"] = f"{save_solution}"
     if save_diagnostics > 0:
-        experiment.diagnostic_options["ts_monitor_diagnostic_quantities"] = r"cgns:diagnostic_%06d.cgns"
-        experiment.diagnostic_options["ts_monitor_diagnostic_quantities_interval"] = f"{save_diagnostics}"
+        experiment.diagnostic_options["ts_monitor_output_fields"] = r"cgns:output_fields_%06d.cgns"
+        experiment.diagnostic_options["ts_monitor_output_fields_interval"] = f"{save_diagnostics}"
 
 
 def get_mesh(characteristic_length: float, voxel_data: Path,
