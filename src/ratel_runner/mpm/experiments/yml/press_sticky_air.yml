@@ -1,5 +1,5 @@
 orders: 1
-diagnostic_order: 1
+output_fields_order: 1
 
 method: mpm
 mpm:
