@@ -93,19 +93,13 @@ def build_petsc(branch: Optional[str] = None, force: Annotated[bool, typer.Optio
         petsc_arch = matches[-1]
         print(f"[info]Using PETSC_ARCH={petsc_arch} from {petscvars}")
 
-    # Run make command
-    if up_to_date:
-        make_cmd = ["make", f"PETSC_DIR={repo.dir}", f"PETSC_ARCH={petsc_arch}", "lib"]
-
-    if not up_to_date or force:
-        # Run the make command
-        print("[info]Running make command:")
-        if force:
-            make_cmd.append("-B")
-        print("  > ", " ".join(make_cmd))
-        subprocess.run(make_cmd, cwd=repo.dir, check=True)
-    else:
-        print("[info]Configuration is up to date. No need to rebuild.")
+    # Run the make command
+    make_cmd = ["make", f"PETSC_DIR={repo.dir}", f"PETSC_ARCH={petsc_arch}", "lib"]
+    print("[info]Running make command:")
+    if force:
+        make_cmd.append("-B")
+    print("  > ", " ".join(make_cmd))
+    subprocess.run(make_cmd, cwd=repo.dir, check=True)
 
     config.set("PETSC_DIR", str(repo.dir))
     config.set("PETSC_ARCH", petsc_arch)
