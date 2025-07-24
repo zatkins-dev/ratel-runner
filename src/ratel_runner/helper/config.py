@@ -4,6 +4,10 @@ from pathlib import Path
 from rich import print
 import os
 from typing import Annotated
+from dataclasses import dataclass
+from difflib import get_close_matches
+from rich.table import Table
+from enum import Enum
 
 from .flux import machines
 
@@ -11,6 +15,45 @@ __all__ = ['get_app_dir', 'get', 'set', 'unset', 'get_fallback', 'app']
 
 
 _configuration = None
+
+
+class GPUMode(Enum):
+    SPX = 'SPX'
+    CPX = 'CPX'
+    TPX = 'TPX'
+
+
+@dataclass
+class ConfigKey:
+    name: str
+    description: str
+    type: type
+
+    def __eq__(self, key):
+        if isinstance(key, ConfigKey):
+            return self.name == key.name
+        return self.name == key
+
+    def __hash__(self):
+        return hash(self.name)
+
+    def __repr__(self):
+        return self.name
+
+    def __str__(self):
+        return self.name
+
+
+_KNOWN_KEYS = {
+    "PETSC_DIR": ConfigKey("PETSC_DIR", "PETSc repository directory", Path),
+    "PETSC_ARCH": ConfigKey("PETSC_ARCH", "PETSc arch name", Path),
+    "PETSC_CONFIG": ConfigKey("PETSC_CONFIG", "User-specified configuration file for PETSc", Path),
+    "LIBCEED_DIR": ConfigKey("LIBCEED_DIR", "libCEED repository directory", Path),
+    "RATEL_DIR": ConfigKey("RATEL_DIR", "Ratel repository directory", Path),
+    "SCRATCH_DIR": ConfigKey("SCRATCH_DIR", "Directory in which to write simulation outputs", Path),
+    "OUTPUT_DIR": ConfigKey("OUTPUT_DIR", "Directory in which to place symlinks to output directories", Path),
+    "GPU_MODE": ConfigKey("GPU_MODE", "GPU mode, only matters for Tuolumne", GPUMode),
+}
 
 
 def _get_config(machine: machines.Machine | None = None):
@@ -84,13 +127,20 @@ def set(key: str, value: str, machine: machines.Machine | None = None, quiet: bo
     """
     Set a key-value pair in the runtime configuration.
     """
+    if key not in _KNOWN_KEYS.keys():
+        print(f"[warn]Unknown key:[/warn] {key}")
+        similar = get_close_matches(key, _KNOWN_KEYS.keys())
+        if len(similar):
+            print(f"[warn]  Similar keys:[/warn] {' '.join(similar)}")
+        raise typer.Exit(1)
+    config_key = _KNOWN_KEYS[key]
     config = _get_runtime_config(machine)
     if not quiet:
-        if key in config:
+        if config_key.name in config:
             print(f"Key {key} already exists. Overwriting value.")
         else:
             print(f"Setting {key} to {value}.")
-    config[key] = value
+    config[config_key.name] = str(config_key.type(value))
 
 
 @app.command('set')
@@ -105,8 +155,15 @@ def get(key: str, machine: machines.Machine | None = None):
     """
     Internal helper function to get the value of a key from the config file.
     """
+    if key not in _KNOWN_KEYS.keys():
+        print(f"[warn]Unknown key:[/warn] {key}")
+        similar = get_close_matches(key, _KNOWN_KEYS.keys())
+        if len(similar):
+            print(f"[warn]  Similar keys:[/warn] {' '.join(similar)}")
+        raise typer.Exit(1)
+    config_key = _KNOWN_KEYS[key]
     config = _get_runtime_config(machine)
-    return config.get(key, None)
+    return config_key.type(config.get(key, None))
 
 
 @app.command('get')
@@ -124,9 +181,13 @@ def list(machine: machines.Machine | None = None):
     """
     config = _get_runtime_config(machine)
     if len(config) == 0:
-        print("[success]Configuration empty, use `config set` to add configuration variables")
-    for key, value in config.items():
-        print(f"{key}: {value}")
+        print("[success]Configuration empty, use[/success] `config set` [success]to add configuration variables")
+    else:
+        table = Table("Name", "Description", "Value")
+        for key, value in config.items():
+            config_key = _KNOWN_KEYS.get(key, ConfigKey(f'[warn]{key}', "[warn]UNKNOWN KEY[/warn]", str))
+            table.add_row(f'[bold underline]{config_key.name}', f"{config_key.description}", value)
+        print(table)
 
 
 @app.command('list')
