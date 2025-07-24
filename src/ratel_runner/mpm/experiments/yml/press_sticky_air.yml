@@ -6,7 +6,19 @@ mpm:
   point_location_type: uniform
   num_points_per_cell: 27
   use_voxel:
-  material: grains,binder
+  material: grains,binder,void
+  void:
+    model: elasticity-mpm-neo-hookean-damage-current
+    E: 50
+    nu: 0.0
+    fracture_toughness: 1e6
+    damage_scaling: 1
+    rho: 1.225e-12
+    use_AT1: false
+    residual_stiffness: 0.01
+    skip_checks:
+    label:
+      value: 0
   binder:
     model: elasticity-mpm-neo-hookean-damage-current
     E: 500 # MPa
@@ -37,5 +49,3 @@ dummy:
   use_AT1: false
 
 surface_force_faces: 1,2
-
-ksp_converged_maxits:

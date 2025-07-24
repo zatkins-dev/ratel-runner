@@ -1,18 +1,6 @@
 # DM
 dm_plex_hash_location:
 
-# MPM projection
-mpm:
-  ksp_type: bcgs
-  ksp_norm_type: preconditioned
-  pc_jacobi_type: diagonal
-
-# Diagnostic projection
-diagnostic_projection:
-  ksp_type: bcgs
-  ksp_norm_type: preconditioned
-  pc_jacobi_type: diagonal
-
 # TS
 ts:
   dt: 0.001
@@ -52,7 +40,7 @@ snes:
 ksp:
   type: bcgsl
   norm_type: preconditioned
-  max_it: 500
+  max_it: 5000
   rtol: 1e-6
   converged:
     reason:
