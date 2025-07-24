@@ -11,6 +11,7 @@ from typing import Optional
 from .. import config
 from .machines import Machine, get_machine_config, detect_machine
 from ..experiment import ExperimentConfig
+from .fluid import *
 
 
 console = get_console()
@@ -23,9 +24,18 @@ def generate(
     max_time: Optional[str] = None,
     link_name: Optional[str] = None,
     output_dir: Optional[Path] = None,
-    additional_args: str = ""
+    additional_args: str = "",
+    checkpoint_interval: int = 0,
+    original_jobid: Optional[int] = None,
+    dependent_jobid: Optional[int] = None
 ) -> tuple[Path, Path]:
     """Generate a flux script to run the experiments."""
+    is_restart = original_jobid is not None
+    if is_restart and dependent_jobid is None:
+        # assume the orig. job id is the job we depend on
+        dependent_jobid = original_jobid
+    if checkpoint_interval <= 0 and is_restart:
+        print("[warn]Generating restart script, but checkpointing is disabled. You probably meant to set `checkpoint_interval`.")
     ratel_dir = Path(config.get_fallback('RATEL_DIR'))
     scratch_dir = Path(config.get_fallback('SCRATCH_DIR'))
     output_dir = output_dir or Path(config.get_fallback('OUTPUT_DIR', Path.cwd() / 'output'))
@@ -51,6 +61,8 @@ def generate(
     print(f"  • Scratch directory: {scratch_dir}")
     print(f"  • Number of processes: {num_processes}")
     print(f"  • Number of nodes: {num_nodes}")
+    if checkpoint_interval > 0:
+        print(f"  • Checkpoint interval: {num_nodes}")
     print("")
 
     cache = scratch_dir / 'flux_scripts'
@@ -65,7 +77,31 @@ def generate(
         output_link.unlink()
 
     ratel = f'{ratel_dir}/bin/ratel-quasistatic'
-    command = f'{ratel} -ceed {machine_config.ceed_backend} -options_file "$SCRATCH/options.yml" {additional_args}'
+    if checkpoint_interval > 0:
+        additional_args += f' -ts_monitor_checkpoint $SCRATCH/checkpoint -ts_monitor_checkpoint_interval {checkpoint_interval}'
+
+    if is_restart:
+        # if restarting, re-use the same scratch directory as the original job
+        scratch = f'{scratch_dir}/{experiment.name}-{fluid_encode(original_jobid, DECIMAL)}'
+        restart_cmds = [
+            '''newest_file=$(find . -maxdepth 1 -name 'checkpoint*.bin' -type f -printf '%T@ %p\\n' | sort -nr | head -n 1 | cut -d' ' -f2-)''',
+            '[[ -f "$newest_file" ]] || exit 1',
+            'echo "Found latest checkpoint file: $newest_file", checking hash...',
+            '''checkpoint_sha=$(sha256sum $newest_file | awk '{print $1}')''',
+            '''expected_sha=$(grep -e "-sha256_hash" "$newest_file.info" | awk '{print $2}')''',
+            'if [ "$checkpoint_sha" = "$expected_sha" ]; then CHECKPOINT_FILE="$newest_file"; else',
+            'echo "Hash doesn\'t match, trying older checkpoint."',
+            '''  CHECKPOINT_FILE=$(find . -maxdepth 1 -name 'checkpoint*.bin' -type f -printf '%T@ %p\\n' | sort -nr | sed -n '2p' | cut -d' ' -f2-)''',
+            '  [[ -f "$CHECKPOINT_FILE" ]] || exit 1',
+            'fi',
+            'echo "Using checkpoint file: $CHECKPOINT_FILE"',
+            '',
+        ]
+        command = f'{ratel} -ceed {machine_config.ceed_backend} -options_file "$SCRATCH/options.yml" {additional_args} -continue_file "$CHECKPOINT_FILE"'
+    else:
+        command = f'{ratel} -ceed {machine_config.ceed_backend} -options_file "$SCRATCH/options.yml" {additional_args}'
+        scratch = f'{scratch_dir}/{experiment.name}-$JOB_ID'
+        restart_cmds = ['']
 
     script = '\n'.join([
         '#!/bin/bash',
@@ -81,6 +117,7 @@ def generate(
         '#flux: --setattr=thp=always # Transparent Huge Pages',
         '#flux: -l # Add task rank prefixes to each line of output.',
         ('#flux: --setattr=hugepages=512GB' if machine == Machine.TUOLUMNE else ''),
+        (f'#flux: --dependency=afterany:{fluid_encode(dependent_jobid)}' if is_restart else ''),  # type: ignore
         '',
         'echo "~~~~~~~~~~~~~~~~~~~"',
         'echo "Welcome!"',
@@ -95,18 +132,21 @@ def generate(
         '',
         'echo ""',
         'echo "-->Job information"',
-        'echo "Job ID = $CENTER_JOB_ID"',
+        '''JOB_ID=$(echo $CENTER_JOB_ID | cut -d'-' -f2)''',
+        'echo "Job ID = $JOB_ID"',
         'echo "Flux Resources = $(flux resource info)"',
         '',
         *[f'export {key}={value}' for key, value in machine_config.defines.items()],
         'ulimit -c unlimited',
         '',
-        f'export SCRATCH="{scratch_dir}/{experiment.name}-$CENTER_JOB_ID"',
+        f'export SCRATCH="{scratch}"',
         'echo ""',
         'echo "Scratch = $SCRATCH"',
         'echo ""',
         '',
+        'echo "> mkdir -p $SCRATCH"',
         'mkdir -p "$SCRATCH"',
+        f'echo "> ln -s $SCRATCH {output_link}"',
         f'ln -s "$SCRATCH" "{output_link}"',
         '',
         'echo ""',
@@ -119,8 +159,10 @@ def generate(
         'echo "-->Starting simulation at $(date)"',
         'echo ""',
         '',
+        *restart_cmds,
+        f'echo "> flux run -N{num_nodes} -n{num_processes} -g1 -x --verbose -l --setopt=mpibind=verbose:1 {command} >> "$SCRATCH/run.log" 2>&1"',
         f'flux run -N{num_nodes} -n{num_processes} -g1 -x --verbose -l --setopt=mpibind=verbose:1 \\',
-        f'  {command} > "$SCRATCH/run.log" 2>&1',
+        f'  {command} >> "$SCRATCH/run.log" 2>&1',
         '',
         'echo ""',
         'echo "-->Simulation finished at $(date)"',
@@ -138,6 +180,44 @@ def generate(
     return script_path, options_file
 
 
+def submit_series(
+    experiment: ExperimentConfig,
+    machine: Optional[Machine],
+    num_processes: int,
+    max_time: Optional[str] = None,
+    link_name: Optional[str] = None,
+    output_dir: Optional[Path] = None,
+    additional_args: str = "",
+    checkpoint_interval: int = 0,
+    max_restarts: int = 2,
+):
+    if checkpoint_interval > 0 and max_restarts > 0:
+        path, _ = generate(experiment,
+                           machine,
+                           num_processes,
+                           max_time,
+                           link_name,
+                           output_dir,
+                           additional_args,
+                           checkpoint_interval)
+        orig_job_id = run(path)
+        prev_job_id = orig_job_id
+
+        for i in range(max_restarts):
+            print(f"[h1]Generating restart {i}")
+            path, _ = generate(experiment,
+                               machine,
+                               num_processes,
+                               max_time,
+                               link_name,
+                               output_dir,
+                               additional_args,
+                               checkpoint_interval,
+                               original_jobid=orig_job_id,
+                               dependent_jobid=prev_job_id)
+            prev_job_id = run(path)
+
+
 def run(script_path: Path):
     command = [
         "flux",
@@ -148,9 +228,10 @@ def run(script_path: Path):
     proc = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if proc.returncode != 0:
         print(f"[error]Return code {proc.returncode}: {proc.stderr.decode()}[/]")
+        exit(1)
     else:
         print(f"[success]Job submitted with ID {proc.stdout.decode()}[/]")
-    # script_path.unlink()
+        return fluid_decode(proc.stdout.decode().strip())
 
 
 def sweep(
