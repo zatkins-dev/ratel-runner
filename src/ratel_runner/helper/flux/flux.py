@@ -82,23 +82,25 @@ def generate(
 
     if is_restart:
         # if restarting, re-use the same scratch directory as the original job
-        scratch = f'"{scratch_dir}/{experiment.name}-{fluid_encode(original_jobid, DECIMAL)}"'
+        scratch = f'{scratch_dir}/{experiment.name}-{fluid_encode(original_jobid, DECIMAL)}'
         restart_cmds = [
-            '''newest_file=$(find . -maxdepth 1 -name 'checkpoint*.bin' -type f -printf '%T@ %p\n' | sort -nr | head -n 1 | cut -d' ' -f2-)''',
+            '''newest_file=$(find . -maxdepth 1 -name 'checkpoint*.bin' -type f -printf '%T@ %p\\n' | sort -nr | head -n 1 | cut -d' ' -f2-)''',
             '[[ -f "$newest_file" ]] || exit 1',
-            'echo "-->Found latest checkpoint file: $newest_file", checking hash...',
-            'checkpoint_sha=$(sha256sum $newest_file)',
-            'expected_sha=$(grep -e "-sha256_hash" "$newest_file.info")',
+            'echo "Found latest checkpoint file: $newest_file", checking hash...',
+            '''checkpoint_sha=$(sha256sum $newest_file | awk '{print $1}')''',
+            '''expected_sha=$(grep -e "-sha256_hash" "$newest_file.info" | awk '{print $2}')''',
             'if [ "$checkpoint_sha" = "$expected_sha" ]; then CHECKPOINT_FILE="$newest_file"; else',
-            '''  CHECKPOINT_FILE=$(find . -maxdepth 1 -name 'checkpoint*.bin' -type f -printf '%T@ %p\n' | sort -nr | sed -n '2p' | cut -d' ' -f2-)''',
+            'echo "Hash doesn\'t match, trying older checkpoint."',
+            '''  CHECKPOINT_FILE=$(find . -maxdepth 1 -name 'checkpoint*.bin' -type f -printf '%T@ %p\\n' | sort -nr | sed -n '2p' | cut -d' ' -f2-)''',
             '  [[ -f "$CHECKPOINT_FILE" ]] || exit 1',
             'fi',
-            ''
+            'echo "Using checkpoint file: $CHECKPOINT_FILE"',
+            '',
         ]
         command = f'{ratel} -ceed {machine_config.ceed_backend} -options_file "$SCRATCH/options.yml" {additional_args} -continue_file "$CHECKPOINT_FILE"'
     else:
         command = f'{ratel} -ceed {machine_config.ceed_backend} -options_file "$SCRATCH/options.yml" {additional_args}'
-        scratch = f'"{scratch_dir}/{experiment.name}-$CENTER_JOB_ID"'
+        scratch = f'{scratch_dir}/{experiment.name}-$JOB_ID'
         restart_cmds = ['']
 
     script = '\n'.join([
@@ -130,7 +132,8 @@ def generate(
         '',
         'echo ""',
         'echo "-->Job information"',
-        'echo "Job ID = $CENTER_JOB_ID"',
+        '''JOB_ID=$(echo $CENTER_JOB_ID | cut -d'-' -f2)''',
+        'echo "Job ID = $JOB_ID"',
         'echo "Flux Resources = $(flux resource info)"',
         '',
         *[f'export {key}={value}' for key, value in machine_config.defines.items()],
@@ -141,7 +144,9 @@ def generate(
         'echo "Scratch = $SCRATCH"',
         'echo ""',
         '',
+        'echo "> mkdir -p $SCRATCH"',
         'mkdir -p "$SCRATCH"',
+        f'echo "> ln -s $SCRATCH {output_link}"',
         f'ln -s "$SCRATCH" "{output_link}"',
         '',
         'echo ""',
@@ -155,8 +160,9 @@ def generate(
         'echo ""',
         '',
         *restart_cmds,
+        f'echo "> flux run -N{num_nodes} -n{num_processes} -g1 -x --verbose -l --setopt=mpibind=verbose:1 {command} >> "$SCRATCH/run.log" 2>&1"',
         f'flux run -N{num_nodes} -n{num_processes} -g1 -x --verbose -l --setopt=mpibind=verbose:1 \\',
-        f'  {command} > "$SCRATCH/run.log" 2>&1',
+        f'  {command} >> "$SCRATCH/run.log" 2>&1',
         '',
         'echo ""',
         'echo "-->Simulation finished at $(date)"',
