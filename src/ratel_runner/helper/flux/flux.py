@@ -118,6 +118,7 @@ def generate(
         '#flux: -l # Add task rank prefixes to each line of output.',
         ('#flux: --setattr=hugepages=512GB' if machine == Machine.TUOLUMNE else ''),
         (f'#flux: --dependency=afterany:{fluid_encode(dependent_jobid)}' if is_restart else ''),  # type: ignore
+        *[f'#flux: {arg}' for arg in machine_config.flux_args],
         '',
         'echo "~~~~~~~~~~~~~~~~~~~"',
         'echo "Welcome!"',
@@ -160,8 +161,8 @@ def generate(
         'echo ""',
         '',
         *restart_cmds,
-        f'echo "> flux run -N{num_nodes} -n{num_processes} -g1 -x --verbose -l --setopt=mpibind=verbose:1 {command} >> "$SCRATCH/run.log" 2>&1"',
-        f'flux run -N{num_nodes} -n{num_processes} -g1 -x --verbose -l --setopt=mpibind=verbose:1 \\',
+        f'echo "> flux run -N{num_nodes} -n{num_processes} -x --verbose -l --setopt=mpibind=verbose:1 {command} >> "$SCRATCH/run.log" 2>&1"',
+        f'flux run -N{num_nodes} -n{num_processes} -x --verbose -l --setopt=mpibind=verbose:1 \\',
         f'  {command} >> "$SCRATCH/run.log" 2>&1',
         '',
         'echo ""',
@@ -189,20 +190,20 @@ def submit_series(
     output_dir: Optional[Path] = None,
     additional_args: str = "",
     checkpoint_interval: int = 0,
-    max_restarts: int = 2,
+    max_restarts: int = 0,
 ):
-    if checkpoint_interval > 0 and max_restarts > 0:
-        path, _ = generate(experiment,
-                           machine,
-                           num_processes,
-                           max_time,
-                           link_name,
-                           output_dir,
-                           additional_args,
-                           checkpoint_interval)
-        orig_job_id = run(path)
-        prev_job_id = orig_job_id
+    path, _ = generate(experiment,
+                       machine,
+                       num_processes,
+                       max_time,
+                       link_name,
+                       output_dir,
+                       additional_args,
+                       checkpoint_interval)
+    orig_job_id = run(path)
+    prev_job_id = orig_job_id
 
+    if checkpoint_interval > 0 and max_restarts > 0:
         for i in range(max_restarts):
             print(f"[h1]Generating restart {i}")
             path, _ = generate(experiment,
