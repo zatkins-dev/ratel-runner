@@ -22,6 +22,12 @@ class GPUMode(Enum):
     CPX = 'CPX'
     TPX = 'TPX'
 
+    def __str__(self):
+        return self.value
+
+    def __repr__(self):
+        return self.value
+
 
 @dataclass
 class ConfigKey:
@@ -163,7 +169,8 @@ def get(key: str, machine: machines.Machine | None = None):
         raise typer.Exit(1)
     config_key = _KNOWN_KEYS[key]
     config = _get_runtime_config(machine)
-    return config_key.type(config.get(key, None))
+    value = config.get(key, None)
+    return config_key.type(value) if value else None
 
 
 @app.command('get')
@@ -183,10 +190,11 @@ def list(machine: machines.Machine | None = None):
     if len(config) == 0:
         print("[success]Configuration empty, use[/success] `config set` [success]to add configuration variables")
     else:
-        table = Table("Name", "Description", "Value")
+        table = Table("Name", "Description", "Options", "Value")
         for key, value in config.items():
             config_key = _KNOWN_KEYS.get(key, ConfigKey(f'[warn]{key}', "[warn]UNKNOWN KEY[/warn]", str))
-            table.add_row(f'[bold underline]{config_key.name}', f"{config_key.description}", value)
+            options = ", ".join(str(e) for e in config_key.type) if issubclass(config_key.type, Enum) else ""
+            table.add_row(f'[bold underline]{config_key.name}', f"{config_key.description}", options, value)
         print(table)
 
 
