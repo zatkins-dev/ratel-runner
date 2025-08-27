@@ -43,14 +43,15 @@ def get_machine_config(machine: Machine) -> MachineConfig:
     machine = Machine(machine)
     if machine == Machine.TUOLUMNE:
         tuo_packages = [
-            'rocmcc/6.4.0-cce-19.0.0d-magic',
-            'rocm/6.4.0',
+            'PrgEnv-amd',
+            'rocmcc/6.4.2-magic',
+            'rocm/6.4.2',
+            'cray-mpich/9.0.1',
             'craype-accel-amd-gfx942',
             'cray-python',
             'cray-libsci_acc',
-            'cray-hdf5-parallel/1.14.3.5',
+            'cray-hdf5-parallel/1.14.3.7',
             'flux_wrappers',
-            'cray-mpich/8.1.32',  # needed while 8.1.33 is in beta
         ]
         tuo_defines = {
             'HSA_XNACK': '1',
