@@ -7,6 +7,7 @@ import subprocess
 import shutil
 from itertools import product
 from typing import Optional
+import re
 
 from .. import config
 from .machines import Machine, get_machine_config, detect_machine
@@ -26,6 +27,7 @@ def generate(
     output_dir: Optional[Path] = None,
     additional_args: str = "",
     checkpoint_interval: int = 0,
+    skip_hash: bool = False,
     original_jobid: Optional[int] = None,
     dependent_jobid: Optional[int] = None
 ) -> tuple[Path, Path]:
@@ -62,7 +64,7 @@ def generate(
     print(f"  • Number of processes: {num_processes}")
     print(f"  • Number of nodes: {num_nodes}")
     if checkpoint_interval > 0:
-        print(f"  • Checkpoint interval: {num_nodes}")
+        print(f"  • Checkpoint interval: {checkpoint_interval}")
     print("")
 
     cache = scratch_dir / 'flux_scripts'
@@ -80,27 +82,53 @@ def generate(
     if checkpoint_interval > 0:
         additional_args += f' -ts_monitor_checkpoint $SCRATCH/checkpoint -ts_monitor_checkpoint_interval {checkpoint_interval}'
 
+    mode = ''
+    if machine == Machine.TUOLUMNE:
+        mode = f'-{config.get_fallback("GPU_MODE", config.GPUMode.SPX)}'
+
+    skip_re = re.compile('continue_file_skip_hash:')
+    user_skip_hash = len(skip_re.findall(experiment.config)) > 0
+    skip_hash = skip_hash or user_skip_hash
+    if skip_hash and not user_skip_hash:
+        additional_args += f' -continue_file_skip_hash'
     if is_restart:
         # if restarting, re-use the same scratch directory as the original job
-        scratch = f'{scratch_dir}/{experiment.name}-{fluid_encode(original_jobid, DECIMAL)}'
+        scratch = f'{scratch_dir}/{experiment.name}{mode}-{fluid_encode(original_jobid, DECIMAL)}'
         restart_cmds = [
             '''newest_file=$(find . -maxdepth 1 -name 'checkpoint*.bin' -type f -printf '%T@ %p\\n' | sort -nr | head -n 1 | cut -d' ' -f2-)''',
             '[[ -f "$newest_file" ]] || exit 1',
-            'echo "Found latest checkpoint file: $newest_file", checking hash...',
-            '''checkpoint_sha=$(sha256sum $newest_file | awk '{print $1}')''',
-            '''expected_sha=$(grep -e "-sha256_hash" "$newest_file.info" | awk '{print $2}')''',
-            'if [ "$checkpoint_sha" = "$expected_sha" ]; then CHECKPOINT_FILE="$newest_file"; else',
-            'echo "Hash doesn\'t match, trying older checkpoint."',
-            '''  CHECKPOINT_FILE=$(find . -maxdepth 1 -name 'checkpoint*.bin' -type f -printf '%T@ %p\\n' | sort -nr | sed -n '2p' | cut -d' ' -f2-)''',
-            '  [[ -f "$CHECKPOINT_FILE" ]] || exit 1',
-            'fi',
-            'echo "Using checkpoint file: $CHECKPOINT_FILE"',
             '',
         ]
+        if skip_hash:
+            print('[info]Skipping hash check on restart')
+            restart_cmds += [
+                'echo "Found latest checkpoint file: $newest_file", checking if fully written...',
+                '''expected_sha=$(grep -e "-sha256_hash" "$newest_file.info" | awk '{print $2}')''',
+                'if [[ -n "$expected_sha" ]]; then CHECKPOINT_FILE="$newest_file"; else',
+                '''  echo "Missing -sha256_hash in $newest_file.info, trying older checkpoint."''',
+                '''  CHECKPOINT_FILE=$(find . -maxdepth 1 -name 'checkpoint*.bin' -type f -printf '%T@ %p\\n' | sort -nr | sed -n '2p' | cut -d' ' -f2-)''',
+                '  [[ -f "$CHECKPOINT_FILE" ]] || exit 1',
+                'fi',
+            ]
+        else:
+            restart_cmds += [
+                'echo "Found latest checkpoint file: $newest_file", checking hash...',
+                '''checkpoint_sha=$(sha256sum $newest_file | awk '{print $1}')''',
+                '''expected_sha=$(grep -e "-sha256_hash" "$newest_file.info" | awk '{print $2}')''',
+                'if [ "$checkpoint_sha" = "$expected_sha" ]; then CHECKPOINT_FILE="$newest_file"; else',
+                'echo "Hash doesn\'t match, trying older checkpoint."',
+                '''  CHECKPOINT_FILE=$(find . -maxdepth 1 -name 'checkpoint*.bin' -type f -printf '%T@ %p\\n' | sort -nr | sed -n '2p' | cut -d' ' -f2-)''',
+                '  [[ -f "$CHECKPOINT_FILE" ]] || exit 1',
+                'fi',
+            ]
+        restart_cmds += [
+            'echo "Using checkpoint file: $CHECKPOINT_FILE"',
+        ]
+
         command = f'{ratel} -ceed {machine_config.ceed_backend} -options_file "$SCRATCH/options.yml" {additional_args} -continue_file "$CHECKPOINT_FILE"'
     else:
         command = f'{ratel} -ceed {machine_config.ceed_backend} -options_file "$SCRATCH/options.yml" {additional_args}'
-        scratch = f'{scratch_dir}/{experiment.name}-$JOB_ID'
+        scratch = f'{scratch_dir}/{experiment.name}{mode}-$JOB_ID'
         restart_cmds = ['']
 
     script = '\n'.join([
@@ -118,6 +146,7 @@ def generate(
         '#flux: -l # Add task rank prefixes to each line of output.',
         ('#flux: --setattr=hugepages=512GB' if machine == Machine.TUOLUMNE else ''),
         (f'#flux: --dependency=afterany:{fluid_encode(dependent_jobid)}' if is_restart else ''),  # type: ignore
+        *[f'#flux: {arg}' for arg in machine_config.flux_args],
         '',
         'echo "~~~~~~~~~~~~~~~~~~~"',
         'echo "Welcome!"',
@@ -138,6 +167,7 @@ def generate(
         '',
         *[f'export {key}={value}' for key, value in machine_config.defines.items()],
         'ulimit -c unlimited',
+        'ulimit -s unlimited',
         '',
         f'export SCRATCH="{scratch}"',
         'echo ""',
@@ -160,8 +190,8 @@ def generate(
         'echo ""',
         '',
         *restart_cmds,
-        f'echo "> flux run -N{num_nodes} -n{num_processes} -g1 -x --verbose -l --setopt=mpibind=verbose:1 {command} >> "$SCRATCH/run.log" 2>&1"',
-        f'flux run -N{num_nodes} -n{num_processes} -g1 -x --verbose -l --setopt=mpibind=verbose:1 \\',
+        f'echo "> flux run -N{num_nodes} -n{num_processes} -x --verbose -l --setopt=mpibind=verbose:1 {command} >> "$SCRATCH/run.log" 2>&1"',
+        f'flux run -N{num_nodes} -n{num_processes} -x --verbose -l --setopt=mpibind=verbose:1 \\',
         f'  {command} >> "$SCRATCH/run.log" 2>&1',
         '',
         'echo ""',
@@ -189,32 +219,36 @@ def submit_series(
     output_dir: Optional[Path] = None,
     additional_args: str = "",
     checkpoint_interval: int = 0,
-    max_restarts: int = 2,
+    max_restarts: int = 0,
 ):
-    if checkpoint_interval > 0 and max_restarts > 0:
-        path, _ = generate(experiment,
-                           machine,
-                           num_processes,
-                           max_time,
-                           link_name,
-                           output_dir,
-                           additional_args,
-                           checkpoint_interval)
-        orig_job_id = run(path)
-        prev_job_id = orig_job_id
+    path, options = generate(experiment,
+                             machine,
+                             num_processes,
+                             max_time,
+                             link_name,
+                             output_dir,
+                             additional_args,
+                             checkpoint_interval)
+    print(f"[info]  Saved script:  {path}")
+    print(f"[info]  Saved options: {options}")
+    orig_job_id = run(path)
+    prev_job_id = orig_job_id
 
+    if checkpoint_interval > 0 and max_restarts > 0:
         for i in range(max_restarts):
             print(f"[h1]Generating restart {i}")
-            path, _ = generate(experiment,
-                               machine,
-                               num_processes,
-                               max_time,
-                               link_name,
-                               output_dir,
-                               additional_args,
-                               checkpoint_interval,
-                               original_jobid=orig_job_id,
-                               dependent_jobid=prev_job_id)
+            path, options = generate(experiment,
+                                     machine,
+                                     num_processes,
+                                     max_time,
+                                     link_name,
+                                     output_dir,
+                                     additional_args,
+                                     checkpoint_interval,
+                                     original_jobid=orig_job_id,
+                                     dependent_jobid=prev_job_id)
+            print(f"[info]  Saved script:  {path}")
+            print(f"[info]  Saved options: {options}")
             prev_job_id = run(path)
 
 

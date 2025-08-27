@@ -16,9 +16,11 @@ ts:
       max: 1e-3
   view:
   monitor:
+  monitor_wall_clock_time:
 
 
 viewer_cgns_batch_size: 1
+viewer_binary_mpiio: 1
 
 # SNES
 snes:
@@ -40,7 +42,7 @@ snes:
 ksp:
   type: bcgsl
   norm_type: preconditioned
-  max_it: 5000
+  max_it: 500
   rtol: 1e-6
   converged:
     reason:
@@ -48,4 +50,10 @@ ksp:
 
 # Preconditioner
 pc:
-  type: jacobi
+  type: pmg
+
+mg_coarse:
+  pc_gamg:
+    aggressive_square_graph: 0
+
+dm_vec_type: hip

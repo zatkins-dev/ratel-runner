@@ -1,11 +1,12 @@
-orders: 1
+order: 1
 output_fields_order: 1
 
 method: mpm
 mpm:
   point_location_type: uniform
   num_points_per_cell: 27
-  use_voxel:
+  initialization: voxel
+  projection: lumped
   material: grains,binder
   binder:
     model: elasticity-mpm-neo-hookean-damage-current

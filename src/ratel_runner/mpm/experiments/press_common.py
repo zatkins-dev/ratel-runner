@@ -4,6 +4,7 @@ from rich.syntax import Syntax
 from math import ceil
 from multiprocessing import cpu_count
 import gmsh
+import numpy as np
 
 from ...helper.experiment import ExperimentConfig
 
@@ -131,8 +132,9 @@ def generate_mesh(characteristic_length: float, voxel_data: Path, scratch_dir: P
     center = DIE_CENTER
     radius = DIE_RADIUS
     height = DIE_HEIGHT
+    square_radius = DIE_RADIUS * np.sqrt(0.125)
 
-    layers = int(ceil(DIE_HEIGHT / characteristic_length))
+    layers = int(np.ceil(DIE_HEIGHT / characteristic_length) + 1)
     print(f"[info]Center: [/]{center}")
     print(f"[info]Radius: [/]{radius}")
     print(f"[info]Height: [/]{height}")
@@ -140,53 +142,121 @@ def generate_mesh(characteristic_length: float, voxel_data: Path, scratch_dir: P
     print(f"[info]Element order: [/]{element_order}")
     print(f"[info]Characteristic length: [/]{characteristic_length}")
 
+    EDGE = 1
     SURFACE = 2
     VOLUME = 3
+
+    inner_rad = radius - 0.5 * square_radius * (1 + np.sqrt(2))
+    outer_rad = radius - square_radius
+    avg_rad = 0.5 * (inner_rad + outer_rad)
+    NPTS_SQUARE = int(np.ceil(0.5 / characteristic_length * (square_radius + np.pi / 4 * radius))) + 1
+    NPTS_RADIAL = int(np.ceil(avg_rad / characteristic_length)) + 1
+
     gmsh.initialize()
-
-    # create cylinder mesh
-    disk = gmsh.model.occ.addDisk(center[0], center[1], center[2], radius, radius)
-
-    # Extrude the disk along (0, 0, height) with the specified number of layers.
-    # The 'recombine=True' option tells gmsh to recombine triangular faces into quads.
-    # The extrude function returns a list of new entities:
-    #  - extruded[0]: the top surface,
-    #  - extruded[1]: the volume,
-    #  - extruded[2]: the lateral (side) surface.
-    extruded = gmsh.model.occ.extrude([(SURFACE, disk)], 0, 0, height,
-                                      numElements=[layers],
-                                      recombine=True)
-
-    # Extract tags from the extrusion result.
-    top_surface = extruded[0][1]  # Top surface created by extrusion.
-    volume = extruded[1][1]  # The volume.
-    lateral_surface = extruded[2][1]  # The lateral surface.
-
-    # Synchronize to update the model with the new entities.
-    gmsh.model.occ.synchronize()
-
-    # Force recombination of bottom surface
-    gmsh.model.mesh.setRecombine(SURFACE, disk)
 
     # set mesh options
     gmsh.option.setNumber("General.NumThreads", cpu_count())
-    gmsh.option.setNumber("Mesh.RecombinationAlgorithm", 3)
-    gmsh.option.setNumber("Mesh.Algorithm", 8)
     gmsh.option.setNumber("Mesh.Algorithm3D", 10)
-    gmsh.option.setNumber("Mesh.MeshSizeMin", 0.75)
-    gmsh.option.setNumber("Mesh.MeshSizeMax", 1.0)
-    gmsh.option.setNumber("Mesh.MeshSizeFactor", characteristic_length)
     gmsh.option.setNumber("Mesh.ElementOrder", element_order)
     gmsh.option.setNumber("Mesh.HighOrderOptimize", 1 if element_order > 1 else 0)
+    gmsh.option.setNumber("Mesh.Binary", 1)
+
+    p1 = gmsh.model.geo.addPoint(*center)
+    p2 = gmsh.model.geo.addPoint(*(center + np.array([square_radius, 0, 0])))
+    offset = (0.5 + 0.5 / np.sqrt(2))
+    p3 = gmsh.model.geo.addPoint(*(center + np.array([square_radius * offset, square_radius * offset, 0])))
+    p4 = gmsh.model.geo.addPoint(*(center + np.array([0, square_radius, 0])))
+
+    p5 = gmsh.model.geo.addPoint(*(center + np.array([radius, 0, 0])))
+    p6 = gmsh.model.geo.addPoint(*(center + np.array([radius / np.sqrt(2), radius / np.sqrt(2), 0])))
+    p7 = gmsh.model.geo.addPoint(*(center + np.array([0, radius, 0])))
+
+    l1 = gmsh.model.geo.addLine(p1, p2)
+    l2 = gmsh.model.geo.addLine(p2, p3)
+    l3 = gmsh.model.geo.addLine(p3, p4)
+    l4 = gmsh.model.geo.addLine(p4, p1)
+
+    l5 = gmsh.model.geo.addLine(p2, p5)
+    l6 = gmsh.model.geo.addCircleArc(p5, p1, p6)
+    l7 = gmsh.model.geo.addLine(p6, p3)
+    l8 = gmsh.model.geo.addCircleArc(p6, p1, p7)
+    l9 = gmsh.model.geo.addLine(p7, p4)
+
+    cl1 = gmsh.model.geo.addCurveLoop((l1, l2, l3, l4))
+    cl2 = gmsh.model.geo.addCurveLoop((l5, l6, l7, -l2))
+    cl3 = gmsh.model.geo.addCurveLoop((l9, -l3, -l7, l8))
+
+    s1 = gmsh.model.geo.addPlaneSurface([cl1])
+    s2 = gmsh.model.geo.addPlaneSurface([cl2])
+    s3 = gmsh.model.geo.addPlaneSurface([cl3])
+
+    for c in [l5, l7, l9]:
+        gmsh.model.geo.mesh.setTransfiniteCurve(c, NPTS_RADIAL)
+    for c in [l1, l2, l3, l4, l6, l8]:
+        gmsh.model.geo.mesh.setTransfiniteCurve(c, NPTS_SQUARE)
+    for s in [s1, s2, s3]:
+        gmsh.model.geo.mesh.setTransfiniteSurface(s)
+        gmsh.model.geo.mesh.setRecombine(SURFACE, s)
+
+    gmsh.model.geo.synchronize()
+
+    def add_quadrant(orig, angle):
+        quadrant = gmsh.model.geo.copy(orig)
+        lines = [id for dim, id in quadrant if dim == EDGE]
+        for l in lines:
+            if l - lines[0] + 1 in [l5, l7, l9]:
+                gmsh.model.geo.mesh.setTransfiniteCurve(l, NPTS_RADIAL)
+            else:
+                gmsh.model.geo.mesh.setTransfiniteCurve(l, NPTS_SQUARE)
+        for s in filter(lambda x: x[0] == SURFACE, quadrant):
+            gmsh.model.geo.mesh.setTransfiniteSurface(s[1])
+            gmsh.model.geo.mesh.setRecombine(s[0], s[1])
+        gmsh.model.geo.rotate(quadrant, center[0], center[1], center[2], 0, 0, 1, angle)
+        return list(set(gmsh.model.getEntities()).intersection(quadrant))
+
+    quadrant1 = gmsh.model.getEntities()
+    add_quadrant(quadrant1, np.pi / 2)
+    add_quadrant(quadrant1, np.pi)
+    add_quadrant(quadrant1, 3 * np.pi / 2)
+
+    gmsh.model.geo.removeAllDuplicates()
+    gmsh.model.geo.synchronize()
+
+    disk = gmsh.model.getEntities(SURFACE)
+
+    # Extrude the disk along (0, 0, height) with the specified number of layers.
+    # The 'recombine=True' option tells gmsh to recombine triangular faces into quads.
+    gmsh.model.geo.extrude(disk, 0, 0, height, [layers], recombine=True)
+
+    # Synchronize to update the model with the new entities.
+    gmsh.model.geo.synchronize()
+
+    bottom_surface = [id for dim, id in disk if dim == SURFACE]
+    eps = characteristic_length / 10
+    top_surface = [
+        id for dim, id in gmsh.model.getEntitiesInBoundingBox(
+            center[0] - (radius + eps),
+            center[1] - (radius + eps),
+            height - eps,
+            center[0] + (radius + eps),
+            center[1] + (radius + eps),
+            height + eps
+        )
+        if dim == SURFACE
+    ]
+
+    volume = [id for _, id in gmsh.model.getEntities(VOLUME)]
+    lateral_surface = [104 + 66 * i for i, _ in enumerate([j for j in volume if j % 3 == 2])]
+    lateral_surface += [134 + 66 * i for i, _ in enumerate([j for j in volume if j % 3 == 0])]
 
     # set physical groups
-    gmsh.model.addPhysicalGroup(SURFACE, [disk], 1)
+    gmsh.model.addPhysicalGroup(SURFACE, bottom_surface, 1)
     gmsh.model.setPhysicalName(SURFACE, 1, "bottom")
-    gmsh.model.addPhysicalGroup(SURFACE, [top_surface], 2)
+    gmsh.model.addPhysicalGroup(SURFACE, top_surface, 2)
     gmsh.model.setPhysicalName(SURFACE, 2, "top")
-    gmsh.model.addPhysicalGroup(SURFACE, [lateral_surface], 3)
+    gmsh.model.addPhysicalGroup(SURFACE, lateral_surface, 3)
     gmsh.model.setPhysicalName(SURFACE, 3, "outside")
-    gmsh.model.addPhysicalGroup(VOLUME, [volume], 1)
+    gmsh.model.addPhysicalGroup(VOLUME, volume, 1)
     gmsh.model.setPhysicalName(VOLUME, 1, "cylinder")
 
     # generate mesh

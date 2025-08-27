@@ -14,7 +14,9 @@ from . import sweep
 custom_theme = Theme({
     "info": "dim white",
     "warning": "bold yellow",
+    "warn": "bold yellow",
     "error": "bold red",
+    "err": "bold red",
     "success": "bold green",
     "h1": "bold underline green",
     "h2": "bold underline white",

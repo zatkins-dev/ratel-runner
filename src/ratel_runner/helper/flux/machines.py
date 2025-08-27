@@ -27,6 +27,7 @@ class MachineConfig:
     parallel_filesystem: Path
     packages: list[str] = field(default_factory=list)
     defines: dict[str, str] = field(default_factory=dict)
+    flux_args: list[str] = field(default_factory=list)
 
 
 class Machine(Enum):
@@ -42,29 +43,38 @@ def get_machine_config(machine: Machine) -> MachineConfig:
     machine = Machine(machine)
     if machine == Machine.TUOLUMNE:
         tuo_packages = [
-            'rocmcc/6.4.0-cce-19.0.0d-magic',
-            'rocm/6.4.0',
+            'PrgEnv-amd',
+            'rocmcc/6.4.2-magic',
+            'rocm/6.4.2',
+            'cray-mpich/9.0.1',
             'craype-accel-amd-gfx942',
             'cray-python',
             'cray-libsci_acc',
-            'cray-hdf5-parallel/1.14.3.5',
+            'cray-hdf5-parallel/1.14.3.7',
             'flux_wrappers',
-            'cray-mpich/8.1.32',  # needed while 8.1.33 is in beta
         ]
         tuo_defines = {
             'HSA_XNACK': '1',
             'MPICH_GPU_SUPPORT_ENABLED': '1',
             'MPICH_SMP_SINGLE_COPY_MODE': 'XPMEM',
         }
+        gpu_mode = config.GPUMode(config.get_fallback('GPU_MODE', config.GPUMode.SPX))
+        if gpu_mode == config.GPUMode.SPX:
+            gpus_per_node = 4
+        elif gpu_mode == config.GPUMode.CPX:
+            gpus_per_node = 24
+        else:  # gpu mode: TPX
+            gpus_per_node = 12
         return MachineConfig(
-            gpus_per_node=4,
+            gpus_per_node=gpus_per_node,
             bank='uco',
             partition='pbatch',
             max_time='12h',
             ceed_backend='/gpu/hip/gen',
             parallel_filesystem=Path('/p/lustre5'),
             packages=tuo_packages,
-            defines=tuo_defines
+            defines=tuo_defines,
+            flux_args=[f"--setattr=gpumode={gpu_mode}", "--conf=resource.rediscover=true"]
         )
     elif machine == Machine.TIOGA:
         tioga_packages = [

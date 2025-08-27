@@ -316,3 +316,60 @@ def flux_uq(
         yes=yes,
         dry_run=dry_run
     )
+
+
+@app.command(
+    context_settings={"allow_extra_args": True, "ignore_unknown_options": True}
+)
+def flux_strong_scaling(
+    ctx: typer.Context,
+    voxel_data: Path,
+    characteristic_length: Annotated[float, typer.Argument(min=0, max=DIE_HEIGHT / 4)],
+    load_fraction: Annotated[float, typer.Argument(min=0.0, max=1.0)] = 0.4,
+    clamp_top: bool = True,
+    num_processes: Annotated[list[int], typer.Option("-n", min=1)] = list([1]),
+    max_time: Annotated[Optional[str], typer.Option("-t", "--max-time")] = None,
+    num_steps: int = 5,
+    log_view: Optional[LogViewType] = LogViewType.TEXT,
+    machine: Optional[machines.Machine] = None,
+    dry_run: bool = False,
+):
+    """Run a parameter sweep using the Flux job scheduler."""
+    experiment = PressStickyAirExperiment(
+        voxel_data,
+        characteristic_length,
+        load_fraction=load_fraction,
+        clamp_top=clamp_top,
+    )
+    experiment._name = experiment._name + "-scaling"
+    experiment.user_options = ctx.args + [
+        "--preload",
+        "--ts_max_steps", f"{num_steps}"
+    ]
+    experiment.logview = log_view
+    set_diagnostic_options(
+        experiment,
+        save_forces=0,
+        save_strain_energy=0,
+        save_swarm=0,
+        save_solution=0,
+        save_diagnostics=0,
+        save=False,
+    )
+    for np in num_processes:
+        if dry_run:
+            script_file, _ = flux.generate(
+                experiment,
+                machine=machine,
+                num_processes=np,
+                max_time=max_time,
+            )
+            print(f"Generated script saved to", script_file)
+            print("Dry run, exiting.")
+        else:
+            flux.submit_series(
+                experiment,
+                machine=machine,
+                num_processes=np,
+                max_time=max_time,
+            )
