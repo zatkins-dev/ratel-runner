@@ -74,6 +74,8 @@ def get_mesh(characteristic_length: float, voxel_data: Path,
         "",
         "dm_plex:",
         f"  filename: {mesh_file.resolve()}",
+        "  cgns_parallel:",
+        "  box_label:",
         "  dim: 3",
         "  simplex: 0",
         "",
@@ -90,15 +92,21 @@ def get_mesh(characteristic_length: float, voxel_data: Path,
             "  clamp_2:",
             f"    translate: 0,0,{-load_fraction * DIE_HEIGHT} # -load_fraction * height",
             "  # Prevent x,y expansion beyond the die boundary",
-            "  slip: 3",
+            "  slip: 3,4,5,6",
             "  slip_3:",
+            "    components: 0,1",
+            "  slip_4:",
+            "    components: 0,1",
+            "  slip_5:",
+            "    components: 0,1",
+            "  slip_6:",
             "    components: 0,1",
             "",
         ])
     else:
         options += '\n'.join([
             "bc:",
-            "  slip: 1,2,3",
+            "  slip: 1,2,3,4,5,6",
             "  # Allow x,y displacement for top and bottom, prescribe z displacement",
             "  slip_1:",
             "    components: 2",
@@ -106,6 +114,12 @@ def get_mesh(characteristic_length: float, voxel_data: Path,
             "    components: 2",
             f"    translate: {-load_fraction * DIE_HEIGHT} # -load_fraction * height",
             "  slip_3:",
+            "    components: 0,1",
+            "  slip_4:",
+            "    components: 0,1",
+            "  slip_5:",
+            "    components: 0,1",
+            "  slip_6:",
             "    components: 0,1",
             "",
         ])
@@ -123,7 +137,7 @@ def generate_mesh(characteristic_length: float, voxel_data: Path, scratch_dir: P
         mesh_dir.mkdir(parents=True, exist_ok=True)
     if not voxel_data.exists():
         raise FileNotFoundError(f"Voxel data {voxel_data} does not exist")
-    mesh_file = mesh_dir / f"cylinder_{voxel_data.stem}_CL{characteristic_length}.msh"
+    mesh_file = mesh_dir / f"cylinder_{voxel_data.stem}_CL{characteristic_length}.cgns"
     if mesh_file.exists():
         console.print(f"[info]Using existing mesh [/]{mesh_file}")
         return mesh_file.resolve()
@@ -231,37 +245,19 @@ def generate_mesh(characteristic_length: float, voxel_data: Path, scratch_dir: P
     # Synchronize to update the model with the new entities.
     gmsh.model.geo.synchronize()
 
-    bottom_surface = [id for dim, id in disk if dim == SURFACE]
-    eps = characteristic_length / 10
-    top_surface = [
-        id for dim, id in gmsh.model.getEntitiesInBoundingBox(
-            center[0] - (radius + eps),
-            center[1] - (radius + eps),
-            height - eps,
-            center[0] + (radius + eps),
-            center[1] + (radius + eps),
-            height + eps
-        )
-        if dim == SURFACE
-    ]
-
-    volume = [id for _, id in gmsh.model.getEntities(VOLUME)]
-    lateral_surface = [104 + 66 * i for i, _ in enumerate([j for j in volume if j % 3 == 2])]
-    lateral_surface += [134 + 66 * i for i, _ in enumerate([j for j in volume if j % 3 == 0])]
-
-    # set physical groups
-    gmsh.model.addPhysicalGroup(SURFACE, bottom_surface, 1)
-    gmsh.model.setPhysicalName(SURFACE, 1, "bottom")
-    gmsh.model.addPhysicalGroup(SURFACE, top_surface, 2)
-    gmsh.model.setPhysicalName(SURFACE, 2, "top")
-    gmsh.model.addPhysicalGroup(SURFACE, lateral_surface, 3)
-    gmsh.model.setPhysicalName(SURFACE, 3, "outside")
-    gmsh.model.addPhysicalGroup(VOLUME, volume, 1)
-    gmsh.model.setPhysicalName(VOLUME, 1, "cylinder")
+    print('About to generate mesh')
 
     # generate mesh
     gmsh.model.mesh.generate(3)
 
+    node_tags, coords, parametric_coords = gmsh.model.mesh.getNodes()
+    types, tags, nodes = gmsh.model.mesh.getElements(VOLUME)
+    gmsh.finalize()
+
+    gmsh.initialize()
+    v1 = gmsh.model.addDiscreteEntity(VOLUME)
+    gmsh.model.mesh.addNodes(VOLUME, v1, node_tags, coords, parametric_coords)
+    gmsh.model.mesh.addElements(VOLUME, v1, types, tags, nodes)
     # save mesh
     gmsh.write(str(mesh_file))
     gmsh.finalize()
