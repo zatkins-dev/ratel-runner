@@ -18,6 +18,7 @@ def run(experiment: ExperimentConfig, num_processes: int = 1, ratel_dir: Optiona
     if scratch_dir is None:
         scratch_dir = Path(config.get_fallback('SCRATCH_DIR')).resolve()
     output_dir = Path(config.get_fallback('OUTPUT_DIR', Path.cwd() / 'output')).resolve()
+    output_dir.mkdir(parents=True, exist_ok=True)
     scratch_dir = Path(config.get_fallback('SCRATCH_DIR', scratch_dir)).resolve()
     if out is not None:
         run_dir = scratch_dir / 'output' / out
