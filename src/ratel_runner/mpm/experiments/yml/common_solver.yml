@@ -14,7 +14,7 @@ ts:
     dt:
       min: 1e-8
       max: 1e-3
-  view:
+  # view:
   monitor:
   monitor_wall_clock_time:
 
@@ -55,5 +55,3 @@ pc:
 mg_coarse:
   pc_gamg:
     aggressive_square_graph: 0
-
-dm_vec_type: hip
