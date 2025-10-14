@@ -7,8 +7,9 @@ import pandas as pd
 from ...helper.experiment import ExperimentConfig, LogViewType
 from ...helper.flux import flux, machines
 from ...helper import config
+from ...helper.utilities import callback_is_set
 
-from .press_common import get_mesh, DIE_HEIGHT, set_diagnostic_options
+from .press_common import get_mesh, set_diagnostic_options
 from ..sweep import load_sweep_specification
 from .. import local
 
@@ -21,13 +22,12 @@ class PressNoAirExperiment(ExperimentConfig):
     """Die press experiment using voxelized CT data and a synthetic mesh"""
 
     def __init__(self, voxel_data: Path, characteristic_length: float,
+                 voxel_size: float, voxel_buf: int = 2,
                  load_fraction: float = 0.4, clamp_top: bool = True):
         if not voxel_data.exists():
             raise FileNotFoundError(f"Voxel data {voxel_data} does not exist")
         if characteristic_length <= 0:
             raise ValueError(f"characteristic_length must be greater than 0, got {characteristic_length:f}")
-        elif characteristic_length > DIE_HEIGHT / 4:
-            raise ValueError(f"characteristic_length is extremely large, maybe you meant {characteristic_length:f}e-3?")
         if load_fraction <= 0.0 or load_fraction > 1.0:
             raise ValueError(f"load_fraction must be in (0.0, 1.0], got {load_fraction}")
         self.voxel_data: Path = voxel_data
@@ -35,19 +35,25 @@ class PressNoAirExperiment(ExperimentConfig):
         self.load_fraction: float = load_fraction
         self.clamp_top: bool = clamp_top
         self.scratch_dir: Path = Path(config.get_fallback('SCRATCH_DIR')).resolve()
+        self.voxel_size: float = voxel_size
+        self.voxel_buf: int = voxel_buf
         base_config = _solver_config_file.read_text() + '\n' + _material_config_file.read_text()
         base_name = Path(__file__).stem.replace('_', '-')
-        name = f"{base_name}-CL{characteristic_length}-LF{load_fraction}{'-clamped' if clamp_top else ''}"
+        name = f"{base_name}-{voxel_data.stem}-CL{characteristic_length}-LF{load_fraction}{'-clamped' if clamp_top else ''}"
         super().__init__(name, self.__doc__, base_config)
 
     @property
     def mesh_options(self) -> str:
+        if hasattr(self, '_mesh_options'):
+            return getattr(self, '_mesh_options')
         options = get_mesh(
             self.characteristic_length,
             self.voxel_data,
             self.scratch_dir,
-            load_fraction=self.load_fraction,
-            clamp_top=self.clamp_top
+            self.load_fraction,
+            self.clamp_top,
+            self.voxel_size,
+            self.voxel_buf,
         )
         options += '\n' + '\n'.join([
             "# Specific options for no air die experiment",
@@ -55,6 +61,7 @@ class PressNoAirExperiment(ExperimentConfig):
             f"mpm_binder_characteristic_length: {self.characteristic_length * 4}",
             "",
         ])
+        setattr(self, '_mesh_options', options)
         return options
 
     def __str__(self) -> str:
@@ -64,6 +71,8 @@ class PressNoAirExperiment(ExperimentConfig):
             f"\n[h2]Mesh Options[/]",
             f"  • Characteristic length: {self.characteristic_length}",
             f"  • Voxel data: {self.voxel_data}",
+            f"  • Voxel size: {self.voxel_size}",
+            f"  • Load fraction: {self.load_fraction}",
         ])
         if self.user_options:
             output += "\n[h2]User Options[/]\n"
@@ -81,9 +90,15 @@ app = typer.Typer()
 )
 def run(
     ctx: typer.Context,
-    voxel_data: Path,
-    characteristic_length: Annotated[float, typer.Argument(min=0, max=DIE_HEIGHT / 4)],
-    load_fraction: Annotated[float, typer.Argument(min=0.0, max=1.0)] = 0.4,
+    voxel_data: Annotated[Path, typer.Option('--voxel-data', '--data', default_factory=lambda: config.get("VOXEL_DATA"), callback=callback_is_set)],
+    characteristic_length: Annotated[float, typer.Option(
+        '--characteristic-length', '--cl', min=0, max=6, default_factory=lambda: config.get("CHARACTERISTIC_LENGTH"), callback=callback_is_set
+    )],
+    voxel_size: Annotated[float, typer.Option('--voxel-size', '--size', default_factory=lambda: config.get("VOXEL_SIZE"), callback=callback_is_set)],
+    load_fraction: Annotated[float, typer.Option(
+        '--load-fraction', '--lf', min=0.0, max=1.0
+    )] = float(config.get_fallback("LOAD_FRACTION", 0.4)),
+    voxel_buffer: int = 4,
     clamp_top: bool = True,
     num_processes: Annotated[int, typer.Option("-n", min=1)] = 1,
     log_view: Optional[LogViewType] = None,
@@ -106,6 +121,8 @@ def run(
     experiment = PressNoAirExperiment(
         voxel_data,
         characteristic_length,
+        voxel_size,
+        voxel_buf=voxel_buffer,
         load_fraction=load_fraction,
         clamp_top=clamp_top,
     )
@@ -133,9 +150,15 @@ def run(
 )
 def flux_run(
     ctx: typer.Context,
-    voxel_data: Path,
-    characteristic_length: Annotated[float, typer.Argument(min=0, max=DIE_HEIGHT / 4)],
-    load_fraction: Annotated[float, typer.Argument(min=0.0, max=1.0)] = 0.4,
+    voxel_data: Annotated[Path, typer.Option('--voxel-data', '--data', default_factory=lambda: config.get("VOXEL_DATA"), callback=callback_is_set)],
+    characteristic_length: Annotated[float, typer.Option(
+        '--characteristic-length', '--cl', min=0, max=6, default_factory=lambda: config.get("CHARACTERISTIC_LENGTH"), callback=callback_is_set
+    )],
+    voxel_size: Annotated[float, typer.Option('--voxel-size', '--size', default_factory=lambda: config.get("VOXEL_SIZE"), callback=callback_is_set)],
+    load_fraction: Annotated[float, typer.Option(
+        '--load-fraction', '--lf', min=0.0, max=1.0
+    )] = float(config.get_fallback("LOAD_FRACTION", 0.4)),
+    voxel_buffer: int = 4,
     clamp_top: bool = True,
     num_processes: Annotated[int, typer.Option("-n", min=1)] = 1,
     max_time: Annotated[Optional[str], typer.Option("-t", "--max-time")] = None,
@@ -160,6 +183,8 @@ def flux_run(
     experiment = PressNoAirExperiment(
         voxel_data,
         characteristic_length,
+        voxel_size,
+        voxel_buf=voxel_buffer,
         load_fraction=load_fraction,
         clamp_top=clamp_top,
     )
@@ -201,9 +226,15 @@ def flux_run(
 def flux_sweep(
     ctx: typer.Context,
     sweep_spec: Path,
-    voxel_data: Path,
-    characteristic_length: Annotated[float, typer.Argument(min=0, max=DIE_HEIGHT / 4)],
-    load_fraction: Annotated[float, typer.Argument(min=0.0, max=1.0)] = 0.4,
+    voxel_data: Annotated[Path, typer.Option('--voxel-data', '--data', default_factory=lambda: config.get("VOXEL_DATA"), callback=callback_is_set)],
+    characteristic_length: Annotated[float, typer.Option(
+        '--characteristic-length', '--cl', min=0, max=6, default_factory=lambda: config.get("CHARACTERISTIC_LENGTH"), callback=callback_is_set
+    )],
+    voxel_size: Annotated[float, typer.Option('--voxel-size', '--size', default_factory=lambda: config.get("VOXEL_SIZE"), callback=callback_is_set)],
+    load_fraction: Annotated[float, typer.Option(
+        '--load-fraction', '--lf', min=0.0, max=1.0
+    )] = float(config.get_fallback("LOAD_FRACTION", 0.4)),
+    voxel_buffer: int = 4,
     clamp_top: bool = True,
     num_processes: Annotated[int, typer.Option("-n", min=1)] = 1,
     max_time: Annotated[Optional[str], typer.Option("-t", "--max-time")] = None,
@@ -229,6 +260,8 @@ def flux_sweep(
     experiment = PressNoAirExperiment(
         voxel_data,
         characteristic_length,
+        voxel_size,
+        voxel_buf=voxel_buffer,
         load_fraction=load_fraction,
         clamp_top=clamp_top,
     )
@@ -262,9 +295,15 @@ def flux_sweep(
 def flux_uq(
     ctx: typer.Context,
     uq_spec: Path,
-    voxel_data: Path,
-    characteristic_length: Annotated[float, typer.Argument(min=0, max=DIE_HEIGHT / 4)],
-    load_fraction: Annotated[float, typer.Argument(min=0.0, max=1.0)] = 0.4,
+    voxel_data: Annotated[Path, typer.Option('--voxel-data', '--data', default_factory=lambda: config.get("VOXEL_DATA"), callback=callback_is_set)],
+    characteristic_length: Annotated[float, typer.Option(
+        '--characteristic-length', '--cl', min=0, max=6, default_factory=lambda: config.get("CHARACTERISTIC_LENGTH"), callback=callback_is_set
+    )],
+    voxel_size: Annotated[float, typer.Option('--voxel-size', '--size', default_factory=lambda: config.get("VOXEL_SIZE"), callback=callback_is_set)],
+    load_fraction: Annotated[float, typer.Option(
+        '--load-fraction', '--lf', min=0.0, max=1.0
+    )] = float(config.get_fallback("LOAD_FRACTION", 0.4)),
+    voxel_buffer: int = 4,
     clamp_top: bool = True,
     num_processes: Annotated[int, typer.Option("-n", min=1)] = 1,
     max_time: Annotated[Optional[str], typer.Option("-t", "--max-time")] = None,
@@ -290,6 +329,8 @@ def flux_uq(
     experiment = PressNoAirExperiment(
         voxel_data,
         characteristic_length,
+        voxel_size,
+        voxel_buf=voxel_buffer,
         load_fraction=load_fraction,
         clamp_top=clamp_top,
     )
@@ -322,9 +363,15 @@ def flux_uq(
 )
 def flux_strong_scaling(
     ctx: typer.Context,
-    voxel_data: Path,
-    characteristic_length: Annotated[float, typer.Argument(min=0, max=DIE_HEIGHT / 4)],
-    load_fraction: Annotated[float, typer.Argument(min=0.0, max=1.0)] = 0.4,
+    voxel_data: Annotated[Path, typer.Option('--voxel-data', '--data', default_factory=lambda: config.get("VOXEL_DATA"), callback=callback_is_set)],
+    characteristic_length: Annotated[float, typer.Option(
+        '--characteristic-length', '--cl', min=0, max=6, default_factory=lambda: config.get("CHARACTERISTIC_LENGTH"), callback=callback_is_set
+    )],
+    voxel_size: Annotated[float, typer.Option('--voxel-size', '--size', default_factory=lambda: config.get("VOXEL_SIZE"), callback=callback_is_set)],
+    load_fraction: Annotated[float, typer.Option(
+        '--load-fraction', '--lf', min=0.0, max=1.0
+    )] = float(config.get_fallback("LOAD_FRACTION", 0.4)),
+    voxel_buffer: int = 4,
     clamp_top: bool = True,
     num_processes: Annotated[list[int], typer.Option("-n", min=1)] = list([1]),
     max_time: Annotated[Optional[str], typer.Option("-t", "--max-time")] = None,
@@ -337,6 +384,8 @@ def flux_strong_scaling(
     experiment = PressNoAirExperiment(
         voxel_data,
         characteristic_length,
+        voxel_size,
+        voxel_buf=voxel_buffer,
         load_fraction=load_fraction,
         clamp_top=clamp_top,
     )
