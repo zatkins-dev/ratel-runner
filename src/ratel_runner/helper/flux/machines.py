@@ -50,7 +50,7 @@ def get_machine_config(machine: Machine) -> MachineConfig:
             'craype-accel-amd-gfx942',
             'cray-python',
             'cray-libsci_acc',
-            'cray-hdf5-parallel/1.14.3.7',
+            'cray-hdf5-parallel/1.14.3.5',
             'flux_wrappers',
         ]
         tuo_defines = {
