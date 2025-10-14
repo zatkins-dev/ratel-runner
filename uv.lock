@@ -462,7 +462,7 @@ wheels = [
 
 [[package]]
 name = "ratel-runner"
-version = "0.4.1"
+version = "0.4.2"
 source = { editable = "." }
 dependencies = [
     { name = "typer" },
