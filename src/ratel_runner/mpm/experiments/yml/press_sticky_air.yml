@@ -4,13 +4,13 @@ output_fields_order: 1
 method: mpm
 mpm:
   point_location_type: uniform
-  num_points_per_cell: 27
+  num_points_per_cell: 64
   initialization: voxel
   projection: lumped
   material: grains,binder,void
   void:
     model: elasticity-mpm-neo-hookean-damage-current
-    E: 50
+    E: 5
     nu: 0.0
     fracture_toughness: 1e6
     damage_scaling: 1
@@ -22,9 +22,9 @@ mpm:
       value: 0
   binder:
     model: elasticity-mpm-neo-hookean-damage-current
-    E: 500 # MPa
+    E: 300 # MPa
     nu: 0.25
-    fracture_toughness: 7.4e3 # MPa mm # 0.74 MPa um
+    fracture_toughness: 7.4e-1 # MPa mm # 0.74 MPa um
     damage_scaling: 1
     rho: 1.190e-9 # tonnes/mm^3 # 1.190e-15 kg/um^3
     use_AT1: false
@@ -33,9 +33,9 @@ mpm:
       value: 1
   grains:
     model: elasticity-mpm-neo-hookean-damage-current
-    E: 7500 # MPa
+    E: 4000 # MPa
     nu: 0.25
-    fracture_toughness: 1.830e4 # MPa mm
+    fracture_toughness: 1.830 # MPa mm
     damage_scaling: 1
     rho: 2.001e-9 # tonnes/mm^3 # 2.001e-15 kg/um^3
     use_AT1: false

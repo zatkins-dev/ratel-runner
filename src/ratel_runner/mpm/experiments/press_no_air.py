@@ -59,6 +59,7 @@ class PressNoAirExperiment(ExperimentConfig):
             "# Specific options for no air die experiment",
             f"mpm_grains_characteristic_length: {self.characteristic_length * 4}",
             f"mpm_binder_characteristic_length: {self.characteristic_length * 4}",
+            f"mpm_stabilization_background_stiffness_characteristic_length: {self.characteristic_length * 4}",
             "",
         ])
         setattr(self, '_mesh_options', options)

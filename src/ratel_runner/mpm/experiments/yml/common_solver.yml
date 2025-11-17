@@ -4,20 +4,19 @@ dm_plex_hash_location:
 # TS
 ts:
   dt: 0.001
-  atol: 1e-2
+  atol: 1e-3
   rtol: 4e-1
   max_snes_failures: -1
   adapt:
     type: basic
     monitor:
-    clip: 0.5,1.5
+    clip: 0.5,1.25
     dt:
       min: 1e-8
       max: 1e-3
   # view:
   monitor:
   monitor_wall_clock_time:
-
 
 viewer_cgns_batch_size: 1
 viewer_binary_mpiio: 1
@@ -26,24 +25,23 @@ viewer_binary_mpiio: 1
 snes:
   type: newtonls
   linesearch:
-    type: bisection
+    type: bt
     monitor:
   max_it: 50
   monitor:
-  rtol: 1e-8
-  stol: 1e-12
   ksp:
     ew:
     ew_version: 3
-    ew_rtol0: 1e-6
-    ew_rtolmax: 1e-5
+    ew_rtol0: 1e-3
+    ew_rtolmin: 1e-6
+    ew_rtolmax: 1e-3
 
 # KSP
 ksp:
   type: bcgsl
   norm_type: preconditioned
   max_it: 500
-  rtol: 1e-6
+  rtol: 1e-3
   converged:
     reason:
     maxits:
@@ -52,6 +50,16 @@ ksp:
 pc:
   type: pmg
 
+# hopefully less memory without sacrificing much in PC quality
 mg_coarse:
-  pc_gamg:
-    aggressive_square_graph: 0
+  mg_levels:
+    ksp_max_it: 3
+  pc:
+    type: gamg
+    gamg:
+      aggressive_square_graph: 0
+      agg_nsmooths: 0
+      aggressive_coarsening: 4
+      low_memory_threshold_filter: 1
+      threshold: -1
+      mis_k_minimum_degree_ordering: 1
