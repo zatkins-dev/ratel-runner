@@ -1,17 +1,33 @@
 from pathlib import Path
 import rich
 from rich.syntax import Syntax
-from math import ceil
 from multiprocessing import cpu_count
+from enum import Enum
 import gmsh
 import numpy as np
+import typer
+from typing import Annotated, Optional, ClassVar
+from abc import ABC, abstractmethod
+from types import SimpleNamespace
+import pandas as pd
 
-from ...helper.experiment import ExperimentConfig
+from ...helper.experiment import ExperimentConfig, LogViewType
 from ...helper import config
-from ...helper.utilities import run_once
+from ...helper.flux import flux, machines
+from ...helper.utilities import run_once, callback_is_set
+
+from .. import local
+from ..sweep import load_sweep_specification
+
 
 console = rich.get_console()
 print = console.print
+
+
+class BoundaryType(Enum):
+    SLIP = "slip"
+    SLIP_CLAMPED_TOP = "slip_clamped_top"
+    CONTACT = "contact"
 
 
 @run_once
@@ -66,7 +82,7 @@ def set_diagnostic_options(experiment: ExperimentConfig, save_forces: int, save_
         experiment.diagnostic_options["ts_monitor_strain_energy_interval"] = f"{save_strain_energy}"
     if save_swarm > 0:
         experiment.diagnostic_options["ts_monitor_swarm_solution"] = "ascii:swarm.xmf"
-        experiment.diagnostic_options["ts_monitor_swarm_fields"] = "J,volume,rho,material"
+        experiment.diagnostic_options["ts_monitor_swarm_fields"] = "J,volume,rho,material,model state,elastic parameters"
         experiment.diagnostic_options["ts_monitor_swarm_solution_interval"] = f"{save_swarm}"
     if save_solution > 0:
         experiment.diagnostic_options["ts_monitor_solution"] = r"cgns:solution_%06d.cgns"
@@ -76,9 +92,15 @@ def set_diagnostic_options(experiment: ExperimentConfig, save_forces: int, save_
         experiment.diagnostic_options["ts_monitor_output_fields_interval"] = f"{save_diagnostics}"
 
 
-def get_mesh(characteristic_length: float, voxel_data: Path,
-             scratch_dir: Path, load_fraction: float, clamp_top: bool,
-             voxel_size: float, voxel_buf: int = 6) -> str:
+def get_mesh(
+    characteristic_length: float,
+    voxel_data: Path,
+    scratch_dir: Path,
+    load_fraction: float,
+    voxel_size: float,
+    voxel_buf: int = 0,
+    bc_type: BoundaryType = BoundaryType.SLIP_CLAMPED_TOP,
+) -> str:
     """
     Get a mesh file for the given voxel data and characteristic length, generating if necessary.
 
@@ -86,11 +108,13 @@ def get_mesh(characteristic_length: float, voxel_data: Path,
     :param voxel_data: Path to the voxel data file (e.g., CT scan).
     :param scratch_dir: Directory to store the generated mesh file.
     :param load_fraction: Fraction of the load to apply to the die (default is 0.4).
-    :param clamp_top: Whether to clamp the top of the die (default is True).
+    :param voxel_size: Size of each voxel in the voxel data
+    :param voxel_buf: Number of buffer voxels to add to the mesh
+    :param bc_type: Type of boundary condition to apply.
 
     :return: A dictionary of mesh options for the experiment configuration.
     """
-    _, height, _ = compute_die_stats(voxel_data, voxel_size, voxel_buf)
+    radius, height, center = compute_die_stats(voxel_data, voxel_size, voxel_buf)
     mesh_file: Path = generate_mesh(characteristic_length, voxel_data, voxel_size, voxel_buf, scratch_dir)
 
     options: str = '\n'.join([
@@ -112,7 +136,66 @@ def get_mesh(characteristic_length: float, voxel_data: Path,
         f"  scale: {(1 - load_fraction)} # (1 - load_fraction) to match displacement",
         "",
     ])
-    if clamp_top:
+    if bc_type == BoundaryType.CONTACT:
+        options += '\n'.join([
+            "bc:",
+            "  allow_no_clamp:",
+            "  contact: 1,2,3,4,5,6",
+            "  # Bottom",
+            "  contact_1:",
+            "    shape: platen",
+            "    normal: 0,0,1",
+            f"    center: {center[0]},{center[1]},{center[2]}",
+            "    penalty_min: 10",
+            "    penalty_max: 1e5",
+            "    penalty_scale: 4",
+            "    type: augmented_lagrangian",
+            "    friction:",
+            "      type: coulomb",
+            "      kinetic: 0.5",
+            "      penalty_min: 1",
+            "      penalty_max: 1e4",
+            "      penalty_scale: 2",
+            "  # Top, compressing 40%",
+            "  contact_2:",
+            "    shape: platen",
+            "    penalty_min: 10",
+            "    penalty_max: 1e5",
+            "    penalty_scale: 4",
+            "    normal: 0,0,-1",
+            f"    center: {center[0]},{center[1]},{center[2]+height}",
+            f"    distance: {load_fraction * height} # load_fraction * height",
+            "    type: augmented_lagrangian",
+            "    friction:",
+            "      type: coulomb",
+            "      kinetic: 0.5",
+            "      penalty_min: 1",
+            "      penalty_max: 1e4",
+            "      penalty_scale: 2",
+            "  # Outside",
+            "",
+        ])
+        for i in range(3, 7):
+            options += '\n'.join([
+                f"  contact_{i}:",
+                "    shape: cylinder",
+                "    axis: 0,0,1",
+                f"    radius: {radius}",
+                f"    center: {center[0]},{center[1]},{center[2]}",
+                "    inside:",
+                "    penalty_min: 10",
+                "    penalty_max: 1e5",
+                "    penalty_scale: 4",
+                "    type: augmented_lagrangian",
+                "    friction:",
+                "      type: coulomb",
+                "      kinetic: 0.3",
+                "      penalty_min: 1",
+                "      penalty_max: 1e4",
+                "      penalty_scale: 2",
+                "",
+            ])
+    elif bc_type == BoundaryType.SLIP_CLAMPED_TOP:
         options += '\n'.join([
             "bc:",
             "  clamp: 1,2",
@@ -131,7 +214,7 @@ def get_mesh(characteristic_length: float, voxel_data: Path,
             "    components: 0,1",
             "",
         ])
-    else:
+    elif bc_type == BoundaryType.SLIP:
         options += '\n'.join([
             "bc:",
             "  slip: 1,2,3,4,5,6",
@@ -295,3 +378,298 @@ def generate_mesh(characteristic_length: float, voxel_data: Path,
 
     print(f"[info]Mesh saved to [/]{mesh_file}")
     return mesh_file
+
+
+class PressExperiment(ExperimentConfig, ABC):
+    """Die press experiment using voxelized CT data and a synthetic mesh, using sticky air for voids"""
+    @property
+    @abstractmethod
+    def solver_config(self) -> str:
+        pass
+
+    @property
+    @abstractmethod
+    def material_config(self) -> str:
+        pass
+
+    base_name: ClassVar[str]
+
+    def __init__(
+            self,
+            voxel_data: Path,
+            characteristic_length: float,
+            voxel_size: float,
+            voxel_buf: int,
+            load_fraction: float,
+            bc_type: BoundaryType,
+            base_name: str | None = None,
+            pretty_name: str | None = None,
+            description: str | None = None,
+    ):
+        if not voxel_data.exists():
+            raise FileNotFoundError(f"Voxel data {voxel_data} does not exist")
+        if characteristic_length <= 0:
+            raise ValueError(f"characteristic_length must be greater than 0, got {characteristic_length:f}")
+        if load_fraction <= 0.0 or load_fraction > 1.0:
+            raise ValueError(f"load_fraction must be in (0.0, 1.0], got {load_fraction}")
+        self.voxel_data: Path = voxel_data
+        self.characteristic_length: float = characteristic_length
+        self.load_fraction: float = load_fraction
+        self.bc_type = bc_type
+        self.scratch_dir: Path = Path(config.get_fallback('SCRATCH_DIR')).resolve()
+        self.voxel_size: float = voxel_size
+        self.voxel_buf: int = voxel_buf
+        base_config = self.solver_config + '\n' + self.material_config
+        name = f"{base_name}-{voxel_data.stem}-CL{characteristic_length}-LF{load_fraction}-{bc_type.value}"
+        pretty_name = pretty_name or "Ratel iMPM Press Experiment"
+        description = description or self.__doc__
+        super().__init__(name=name, pretty_name=pretty_name, description=description, base_config=base_config)
+
+    @property
+    def mesh_options(self) -> str:
+        if hasattr(self, '_mesh_options'):
+            return getattr(self, '_mesh_options')
+        options = get_mesh(
+            self.characteristic_length,
+            self.voxel_data,
+            self.scratch_dir,
+            load_fraction=self.load_fraction,
+            bc_type=self.bc_type,
+            voxel_size=self.voxel_size,
+            voxel_buf=self.voxel_buf
+        )
+        setattr(self, '_mesh_options', options)
+        return options
+
+    def __str__(self) -> str:
+        output = '\n'.join([
+            f'[h1]{self.pretty_name}[/]',
+            f'{self.description}',
+            f"\n[h2]Mesh Options[/]",
+            f"  • Characteristic length: {self.characteristic_length}",
+            f"  • Voxel data: {self.voxel_data}",
+            f"  • Voxel size: {self.voxel_size}",
+            f"  • Load fraction: {self.load_fraction}",
+        ])
+        if self.user_options:
+            output += "\n[h2]User Options[/]\n"
+            output += "\n".join([f"  • {key}: {value}" for key, value in self.user_options.items()])
+        return output
+
+    @classmethod
+    def create_options_callback(cls):
+        def options_callback(
+            ctx: typer.Context,
+            voxel_data: Annotated[Path, typer.Option('--voxel-data', '--data', default_factory=lambda: config.get("VOXEL_DATA"), callback=callback_is_set, help="Path to voxel dump file")],
+            characteristic_length: Annotated[float, typer.Option(
+                '--characteristic-length', '--cl', min=0, max=6, default_factory=lambda: config.get("CHARACTERISTIC_LENGTH"), callback=callback_is_set, help="Characteristic length of background mesh"
+            )],
+            voxel_size: Annotated[float, typer.Option('--voxel-size', '--size', default_factory=lambda: config.get("VOXEL_SIZE"), callback=callback_is_set, help="Voxel side length, should be constant for a given voxel dump file")],
+            load_fraction: Annotated[float, typer.Option(
+                '--load-fraction', '--lf', min=0.0, max=1.0, help="Percent of total cylinder height to compress"
+            )] = float(config.get_fallback("LOAD_FRACTION", 0.4)),
+            voxel_buffer: Annotated[int, typer.Option(help="Number of buffer voxel widths to add to the mesh")] = 0,
+            bc_type: Annotated[BoundaryType, typer.Option(
+                help="Type of boundary condition to apply")] = BoundaryType.SLIP_CLAMPED_TOP,
+            machine: Annotated[Optional[machines.Machine], typer.Option(
+                help="HPC machine to generate flux scripts for")] = None,
+            num_processes: Annotated[int, typer.Option("-n", min=1, help="Number of MPI processes")] = 1,
+            log_view: Annotated[Optional[LogViewType], typer.Option(help="Type of log view profiling to use")] = None,
+            save_forces: Annotated[int, typer.Option(
+                min=0, help="Interval to save surface forces, or 0 to disable")] = 1,
+            save_strain_energy: Annotated[int, typer.Option(
+                min=0, help="Interval to save strain energy, or 0 to disable")] = 1,
+            save_swarm: Annotated[int, typer.Option(min=0, help="Interval to save swarm data, or 0 to disable")] = 200,
+            save_solution: Annotated[int, typer.Option(
+                min=0, help="Interval to save mesh solution, or 0 to disable")] = 200,
+            save_diagnostics: Annotated[int, typer.Option(
+                min=0, help="Interval to save projected diagnostic quantities, or zero to disable")] = 200,
+            save: Annotated[bool, typer.Option(
+                help="Global flag to enable or disable writing diagnostics. If False, nothing will be written")] = True,
+            checkpoint: Annotated[int, typer.Option(
+                min=0, help="Interval to save checkpoint files for restarting runs, or zero to disable")] = 20,
+            max_time: Annotated[Optional[str], typer.Option(
+                "-t", "--max-time", help="Flux time specification for max job length.")] = None,
+            max_restarts: Annotated[int, typer.Option(help="Number of restart jobs to enqueue", min=0)] = 0,
+            dry_run: Annotated[bool, typer.Option(help="If true, only generate scripts and exit")] = False,
+            yes: Annotated[bool, typer.Option('-y', help="Automatically accept any confirmation prompts")] = False,
+        ):
+            """Common options for press experiments
+
+            Args:
+                ctx (typer.Context): Typer application context
+                voxel_data (Path, optional): Path to voxel dump file.
+                characteristic_length (float, optional): Characteristic length of background mesh.
+                voxel_size (float, optional): Voxel side length, should be constant for a given voxel dump file.
+                load_fraction (float, optional): Percent of total cylinder height to compress.
+                voxel_buffer (int, optional): Number of buffer voxel widths to add to the mesh.
+                bc_type (BoundaryType, optional): Type of boundary condition to apply.
+                machine (machines.Machine, optional): HPC machine to generate flux scripts for.
+                num_processes (int, optional): Number of MPI processes.
+                log_view (LogViewType, optional): Type of log view profiling to use.
+                save_forces (int, optional): Interval to save surface forces, or 0 to disable.
+                save_strain_energy (int, optional): Interval to save strain energy, or 0 to disable.
+                save_swarm (int, optional): Interval to save swarm data, or 0 to disable.
+                save_solution (int, optional): Interval to save mesh solution, or 0 to disable.
+                save_diagnostics (int, optional): Interval to save projected diagnostic quantities, or zero to disable.
+                save (bool, optional): Global flag to enable or disable writing diagnostics. If False, nothing will be written.
+                checkpoint (int, optional): Interval to save checkpoint files for restarting runs, or zero to disable.
+                max_time (str, optional): Flux time specification for max job length.
+                max_restarts(int, optional): Number of restart jobs to enqueue.
+                dry_run (bool, optional): If true, only generate scripts and exit.
+                yes (bool, optional): Automatically accept any confirmation prompts.
+            """
+            if not ctx.obj:
+                ctx.obj = SimpleNamespace()
+            context = ctx.obj
+            context.experiment = cls(
+                voxel_data,
+                characteristic_length,
+                voxel_size,
+                voxel_buf=voxel_buffer,
+                load_fraction=load_fraction,
+                bc_type=bc_type,
+            )
+            context.experiment.logview = log_view
+            set_diagnostic_options(
+                context.experiment,
+                save_forces=save_forces,
+                save_strain_energy=save_strain_energy,
+                save_swarm=save_swarm,
+                save_solution=save_solution,
+                save_diagnostics=save_diagnostics,
+                save=save,
+            )
+            context.machine = machine if machine is not None else machines.detect_machine()
+            context.num_processes = num_processes
+            context.checkpoint = checkpoint
+            context.max_time = max_time
+            context.max_restarts = max_restarts
+            context.dry_run = dry_run
+            context.yes = yes
+        return options_callback
+
+    @classmethod
+    def create_app(cls):
+        app = typer.Typer(name=cls.base_name, callback=cls.create_options_callback(), help=cls.__doc__)
+
+        @app.command(context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
+        def run(
+            ctx: typer.Context,
+            out: Optional[Path] = None,
+        ):
+            """Run the experiment in the current shell (blocking)
+
+            Hint: See `ratel-runner mpm press [EXPERIMENT] --help` for all options
+            """
+            ctx.obj.experiment.user_options = ctx.args
+            local.run(
+                ctx.obj.experiment,
+                num_processes=ctx.obj.num_processes,
+                out=out,
+                dry_run=ctx.obj.dry_run
+            )
+
+        @app.command(context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
+        def flux_run(
+            ctx: typer.Context,
+        ):
+            """Run the experiment using the Flux job scheduler
+
+            Hint: See `ratel-runner mpm press [EXPERIMENT] --help` for all options
+            """
+            ctx.obj.experiment.user_options = ctx.args
+            if ctx.obj.dry_run:
+                script_file, _ = flux.generate(
+                    ctx.obj.experiment,
+                    machine=ctx.obj.machine,
+                    num_processes=ctx.obj.num_processes,
+                    max_time=ctx.obj.max_time,
+                    checkpoint_interval=ctx.obj.checkpoint,
+                )
+                print(f"Generated script saved to", script_file)
+                print("Dry run, exiting.")
+            else:
+                flux.submit_series(
+                    ctx.obj.experiment,
+                    machine=ctx.obj.machine,
+                    num_processes=ctx.obj.num_processes,
+                    max_time=ctx.obj.max_time,
+                    checkpoint_interval=ctx.obj.checkpoint,
+                    max_restarts=ctx.obj.max_restarts
+                )
+
+        @app.command(context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
+        def flux_sweep(
+            ctx: typer.Context,
+            sweep_spec: Path,
+        ):
+            """Run a parameter sweep using the Flux job scheduler.
+
+            Hint: See `ratel-runner mpm press [EXPERIMENT] --help` for all options
+            """
+            ctx.obj.experiment.user_options = ctx.args
+            sweep_params = load_sweep_specification(ctx, sweep_spec, quiet=True)
+            flux.sweep(
+                ctx.obj.experiment,
+                machine=ctx.obj.machine,
+                num_processes=ctx.obj.num_processes,
+                max_time=ctx.obj.max_time,
+                parameters=sweep_params,
+                sweep_name=sweep_spec.stem,
+                yes=ctx.obj.yes,
+                dry_run=ctx.obj.dry_run
+            )
+
+        @app.command(context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
+        def flux_uq(
+            ctx: typer.Context,
+            uq_spec: Path,
+        ):
+            """Run a parameter sweep using the Flux job scheduler."""
+            ctx.obj.experiment.user_options = ctx.args
+            uq_params = pd.read_csv(uq_spec).to_dict(orient='list')
+            flux.uq(
+                ctx.obj.experiment,
+                machine=ctx.obj.machine,
+                num_processes=ctx.obj.num_processes,
+                max_time=ctx.obj.max_time,
+                parameters=uq_params,
+                sweep_name=uq_spec.stem,
+                yes=ctx.obj.yes,
+                dry_run=ctx.obj.dry_run
+            )
+
+        @app.command(context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
+        def flux_strong_scaling(
+            ctx: typer.Context,
+            num_processes: Annotated[list[int], typer.Argument(min=1)],
+            num_steps: int = 5,
+        ):
+            """Run a parameter sweep using the Flux job scheduler.
+
+            Hint: See `ratel-runner mpm press [EXPERIMENT] --help` for all options
+            """
+            ctx.obj.experiment._name = ctx.obj.experiment._name + "-scaling"
+            ctx.obj.experiment.user_options = ctx.args + [
+                "--preload",
+                "--ts_max_steps", f"{num_steps}"
+            ]
+            for np in num_processes:
+                if ctx.obj.dry_run:
+                    script_file, _ = flux.generate(
+                        ctx.obj.experiment,
+                        machine=ctx.obj.machine,
+                        num_processes=np,
+                        max_time=ctx.obj.max_time,
+                    )
+                    print(f"Generated script saved to", script_file)
+                    print("Dry run, exiting.")
+                else:
+                    flux.submit_series(
+                        ctx.obj.experiment,
+                        machine=ctx.obj.machine,
+                        num_processes=np,
+                        max_time=ctx.obj.max_time,
+                    )
+        return app

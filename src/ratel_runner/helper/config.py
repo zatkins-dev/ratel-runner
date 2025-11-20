@@ -181,8 +181,8 @@ def set(key: str, value: str, machine: machines.Machine | None = None, quiet: bo
     config = _get_runtime_config(machine)
     if not quiet:
         if config_key.name in config:
-            print(f"Key {key} already exists. Overwriting value.")
-        print(f"Setting {key} to {value}.")
+            print(f"Key {key} already exists. Overwriting value (old: {config[key]})")
+        print(f"Setting {key} to {value}")
     config[config_key.name] = str(config_key.type(value))
 
 
