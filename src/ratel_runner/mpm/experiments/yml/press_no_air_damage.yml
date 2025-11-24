@@ -30,7 +30,7 @@ mpm:
       value: 1
   grains:
     model: elasticity-mpm-neo-hookean-damage-current
-    E: 2500 # MPa
+    E: 1200 # MPa
     nu: 0.25
     fracture_toughness: 1.830e4 # MPa mm
     damage_scaling: 1

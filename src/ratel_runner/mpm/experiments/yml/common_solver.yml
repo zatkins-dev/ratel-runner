@@ -3,7 +3,7 @@ dm_plex_hash_location:
 
 # TS
 ts:
-  dt: 0.001
+  dt: 2e-3
   atol: 1e-3
   rtol: 4e-1
   max_snes_failures: -1
@@ -13,7 +13,7 @@ ts:
     clip: 0.5,1.25
     dt:
       min: 1e-8
-      max: 1e-3
+      max: 2e-3
   # view:
   monitor:
   monitor_wall_clock_time:
@@ -21,27 +21,11 @@ ts:
 viewer_cgns_batch_size: 1
 viewer_binary_mpiio: 1
 
-# SNES
-snes:
-  type: newtonls
-  linesearch:
-    type: bt
-    monitor:
-  max_it: 50
-  monitor:
-  ksp:
-    ew:
-    ew_version: 3
-    ew_rtol0: 1e-3
-    ew_rtolmin: 1e-6
-    ew_rtolmax: 1e-3
-
 # KSP
 ksp:
   type: bcgsl
   norm_type: preconditioned
   max_it: 500
-  rtol: 1e-3
   converged:
     reason:
     maxits:

@@ -2,7 +2,7 @@ from pathlib import Path
 import importlib.resources
 from typing import ClassVar
 
-from .press_common import PressExperiment
+from .press_common import PressExperiment, MaterialType
 
 
 class PressNoAirExperiment(PressExperiment):
@@ -19,7 +19,10 @@ class PressNoAirExperiment(PressExperiment):
     def material_config(self) -> str:
         if hasattr(self, '_material_options'):
             return getattr(self, '_material_options')
-        options = (importlib.resources.files(__package__ or '') / 'yml' / 'press_no_air.yml').read_text()
+        options = (importlib.resources.files(__package__ or '') / 'yml' /
+                   f'press_no_air_{self.material.value}.yml').read_text()
+        if self.material == MaterialType.MONOCLINIC or self.material == MaterialType.TRICLINIC:
+            options += f"\nmpm_grains_random_seed: {self.seed}\n"
         setattr(self, '_material_options', options)
         return getattr(self, '_material_options')
 
@@ -34,13 +37,14 @@ class PressNoAirExperiment(PressExperiment):
         if hasattr(self, '_mesh_options'):
             return getattr(self, '_mesh_options')
         options = super().mesh_options
-        options += '\n' + '\n'.join([
-            "# Specific options for no air die experiment",
-            f"mpm_grains_characteristic_length: {self.characteristic_length * 4}",
-            f"mpm_binder_characteristic_length: {self.characteristic_length * 4}",
-            f"mpm_stabilization_background_stiffness_characteristic_length: {self.characteristic_length * 4}",
-            "",
-        ])
+        if self.material == MaterialType.DAMAGE:
+            options += '\n' + '\n'.join([
+                "# Specific options for no air die experiment",
+                f"mpm_grains_characteristic_length: {self.characteristic_length * 4}",
+                f"mpm_binder_characteristic_length: {self.characteristic_length * 4}",
+                f"mpm_stabilization_background_stiffness_characteristic_length: {self.characteristic_length * 4}",
+                "",
+            ])
         setattr(self, '_mesh_options', options)
         return options
 

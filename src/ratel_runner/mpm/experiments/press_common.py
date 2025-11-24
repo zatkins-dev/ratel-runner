@@ -29,6 +29,51 @@ class BoundaryType(Enum):
     SLIP_CLAMPED_TOP = "slip_clamped_top"
     CONTACT = "contact"
 
+    def snes_options(self) -> str:
+        if self == BoundaryType.CONTACT:
+            return '\n'.join([
+                "# SNES options for contact boundary conditions",
+                "snes:",
+                "  monitor:",
+                "  max_it: 15",
+                "  rtol: 1e-6",
+                "augmented_lagrangian_inner_snes:",
+                "  linesearch:",
+                "    type: bisection",
+                "    monitor:",
+                "  max_it: 20",
+                "  monitor:",
+                "  ksp:",
+                "    ew:",
+                "    ew_version: 3",
+                "    ew_rtol0: 1e-4",
+                "    ew_rtolmax: 1e-4",
+                ""
+            ])
+        else:
+            return '\n'.join([
+                "# SNES options for slip/clamped boundary conditions",
+                "snes:",
+                "  linesearch:",
+                "    type: bisection",
+                "    monitor:",
+                "  max_it: 20",
+                "  monitor:",
+                "  ksp:",
+                "    ew:",
+                "    ew_version: 3",
+                "    ew_rtol0: 1e-4",
+                "    ew_rtolmax: 1e-4",
+                ""
+            ])
+
+
+class MaterialType(Enum):
+    DAMAGE = "damage"
+    NEO_HOOKEAN = "neo_hookean"
+    MONOCLINIC = "monoclinic"
+    TRICLINIC = "triclinic"
+
 
 @run_once
 def register_keys():
@@ -36,7 +81,8 @@ def register_keys():
         'VOXEL_SIZE': config.ConfigKey('VOXEL_SIZE', 'Side length for each voxel', float),
         'LOAD_FRACTION': config.ConfigKey('LOAD_FRACTION', 'Desired Final height/Initial height ratio', float, config.CheckBounded(0, 1)),
         'VOXEL_DATA': config.ConfigKey('VOXEL_DATA', 'Path to voxel data file', Path),
-        'CHARACTERISTIC_LENGTH': config.ConfigKey('CHARACTERISTIC_LENGTH', 'Desired characteristic length of background mesh', float)
+        'CHARACTERISTIC_LENGTH': config.ConfigKey('CHARACTERISTIC_LENGTH', 'Desired characteristic length of background mesh', float),
+        'GRAIN_IDS': config.ConfigKey('GRAIN_IDS', 'Range-based list of IDs corresponding to different grains', str),
     }
     for name, key in keys.items():
         config.add_key(name, key)
@@ -147,20 +193,20 @@ def get_mesh(
             "    normal: 0,0,1",
             f"    center: {center[0]},{center[1]},{center[2]}",
             "    penalty_min: 10",
-            "    penalty_max: 1e5",
+            "    penalty_max: 5e4",
             "    penalty_scale: 4",
             "    type: augmented_lagrangian",
             "    friction:",
             "      type: coulomb",
             "      kinetic: 0.5",
-            "      penalty_min: 1",
-            "      penalty_max: 1e4",
+            "      penalty_min: 10",
+            "      penalty_max: 5e3",
             "      penalty_scale: 2",
             "  # Top, compressing 40%",
             "  contact_2:",
             "    shape: platen",
             "    penalty_min: 10",
-            "    penalty_max: 1e5",
+            "    penalty_max: 5e4",
             "    penalty_scale: 4",
             "    normal: 0,0,-1",
             f"    center: {center[0]},{center[1]},{center[2]+height}",
@@ -169,8 +215,8 @@ def get_mesh(
             "    friction:",
             "      type: coulomb",
             "      kinetic: 0.5",
-            "      penalty_min: 1",
-            "      penalty_max: 1e4",
+            "      penalty_min: 10",
+            "      penalty_max: 5e3",
             "      penalty_scale: 2",
             "  # Outside",
             "",
@@ -184,14 +230,14 @@ def get_mesh(
                 f"    center: {center[0]},{center[1]},{center[2]}",
                 "    inside:",
                 "    penalty_min: 10",
-                "    penalty_max: 1e5",
+                "    penalty_max: 5e4",
                 "    penalty_scale: 4",
                 "    type: augmented_lagrangian",
                 "    friction:",
                 "      type: coulomb",
-                "      kinetic: 0.3",
-                "      penalty_min: 1",
-                "      penalty_max: 1e4",
+                "      kinetic: 0.5",
+                "      penalty_min: 10",
+                "      penalty_max: 5e3",
                 "      penalty_scale: 2",
                 "",
             ])
@@ -402,6 +448,8 @@ class PressExperiment(ExperimentConfig, ABC):
             voxel_buf: int,
             load_fraction: float,
             bc_type: BoundaryType,
+            material: MaterialType,
+            seed: Optional[int],
             base_name: str | None = None,
             pretty_name: str | None = None,
             description: str | None = None,
@@ -419,8 +467,11 @@ class PressExperiment(ExperimentConfig, ABC):
         self.scratch_dir: Path = Path(config.get_fallback('SCRATCH_DIR')).resolve()
         self.voxel_size: float = voxel_size
         self.voxel_buf: int = voxel_buf
-        base_config = self.solver_config + '\n' + self.material_config
-        name = f"{base_name}-{voxel_data.stem}-CL{characteristic_length}-LF{load_fraction}-{bc_type.value}"
+        self.material: MaterialType = material
+        self.seed: int = seed or np.random.SeedSequence().generate_state(1)[0]
+        base_config = self.solver_config + '\n' + self.bc_type.snes_options() + '\n' + self.material_config + '\n'
+        base_config += f'mpm_grains_label_value: {config.get_fallback("GRAIN_IDS", "2")}\n'
+        name = f"{base_name}-{voxel_data.stem}-{material.value}-CL{characteristic_length}-LF{load_fraction}-{bc_type.value}"
         pretty_name = pretty_name or "Ratel iMPM Press Experiment"
         description = description or self.__doc__
         super().__init__(name=name, pretty_name=pretty_name, description=description, base_config=base_config)
@@ -465,12 +516,15 @@ class PressExperiment(ExperimentConfig, ABC):
                 '--characteristic-length', '--cl', min=0, max=6, default_factory=lambda: config.get("CHARACTERISTIC_LENGTH"), callback=callback_is_set, help="Characteristic length of background mesh"
             )],
             voxel_size: Annotated[float, typer.Option('--voxel-size', '--size', default_factory=lambda: config.get("VOXEL_SIZE"), callback=callback_is_set, help="Voxel side length, should be constant for a given voxel dump file")],
+            material: Annotated[MaterialType, typer.Option('--material', help="Material model to use")],
             load_fraction: Annotated[float, typer.Option(
                 '--load-fraction', '--lf', min=0.0, max=1.0, help="Percent of total cylinder height to compress"
             )] = float(config.get_fallback("LOAD_FRACTION", 0.4)),
             voxel_buffer: Annotated[int, typer.Option(help="Number of buffer voxel widths to add to the mesh")] = 0,
             bc_type: Annotated[BoundaryType, typer.Option(
                 help="Type of boundary condition to apply")] = BoundaryType.SLIP_CLAMPED_TOP,
+            seed: Annotated[Optional[int], typer.Option(
+                help="Random seed for any stochastic components, mainly for anisotropic materials")] = None,
             machine: Annotated[Optional[machines.Machine], typer.Option(
                 help="HPC machine to generate flux scripts for")] = None,
             num_processes: Annotated[int, typer.Option("-n", min=1, help="Number of MPI processes")] = 1,
@@ -529,6 +583,8 @@ class PressExperiment(ExperimentConfig, ABC):
                 voxel_buf=voxel_buffer,
                 load_fraction=load_fraction,
                 bc_type=bc_type,
+                material=material,
+                seed=seed,
             )
             context.experiment.logview = log_view
             set_diagnostic_options(
