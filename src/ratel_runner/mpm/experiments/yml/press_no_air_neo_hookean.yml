@@ -1,0 +1,39 @@
+order: 1
+output_fields_order: 1
+
+method: mpm
+mpm:
+  point_location_type: uniform
+  num_points_per_cell: 216
+  stabilization:
+    type: background_stiffness
+    background_stiffness:
+      model: elasticity-linear
+      E: 2
+      nu: 0.0
+      forcing: none
+  initialization: voxel
+  projection: lumped
+  material: grains,binder
+  binder:
+    model: elasticity-mpm-neo-hookean-current
+    E: 200 # MPa
+    nu: 0.25
+    rho: 1.190e-9 # tonnes/mm^3 # 1.190e-15 kg/um^3
+    label:
+      value: 1
+  grains:
+    model: elasticity-mpm-neo-hookean-current
+    E: 1200 # MPa
+    nu: 0.25
+    rho: 2.001e-9 # tonnes/mm^3 # 2.001e-15 kg/um^3
+
+material: dummy
+dummy:
+  model: elasticity-mpm-neo-hookean-current
+  skip_checks:
+
+forcing: body
+forcing_body_vector: 0,0,-9810
+
+surface_force_faces: 1,2

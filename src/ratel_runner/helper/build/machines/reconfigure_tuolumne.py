@@ -14,7 +14,8 @@ if __name__ == '__main__':
         f'--with-hdf5-dir={os.environ["HDF5_DIR"]}',
         '--download-cgns',
         '--download-hypre',
-        '--download-hypre-configure-arguments=--enable-rocblas --enable-rocsolver --enable-rocsparse --enable-gpu-aware-mpi',
+        '--download-hypre-configure-arguments=--enable-rocblas --enable-rocsolver --enable-gpu-aware-mpi --enable-unified-memory',
+        '--download-umpire',
         '--download-kokkos',
         '--download-kokkos-kernels',
         '--download-metis',
@@ -36,10 +37,11 @@ if __name__ == '__main__':
         '--with-openmp=0',
         '--with-threadsafety',
         '--with-fc=0',
+        'LIBS=-lrt -lpthread -lhugetlbfs',
         'FOPTFLAGS=-O3 -g',
         'HIPOPTFLAGS=-O3 -g -march=native -ffp-contract=fast -fPIC -fno-math-errno -fassociative-math -freciprocal-math',
         'COPTFLAGS=-O3 -g -march=native -ffp-contract=fast -fPIC -fno-math-errno -fassociative-math -freciprocal-math',
         'CXXOPTFLAGS=-O3 -g -march=native -ffp-contract=fast -fPIC -fno-math-errno -fassociative-math -freciprocal-math',
-        'PETSC_ARCH=arch-tuolumne-kokkos-O-64',
+        'PETSC_ARCH=arch-tuolumne-O-64-rocmcc',
     ]
     configure.petsc_configure(configure_options)

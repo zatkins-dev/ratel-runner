@@ -28,6 +28,7 @@ class MachineConfig:
     packages: list[str] = field(default_factory=list)
     defines: dict[str, str] = field(default_factory=dict)
     flux_args: list[str] = field(default_factory=list)
+    petsc_args: list[str] = field(default_factory=list)
 
 
 class Machine(Enum):
@@ -44,13 +45,13 @@ def get_machine_config(machine: Machine) -> MachineConfig:
     if machine == Machine.TUOLUMNE:
         tuo_packages = [
             'PrgEnv-amd',
-            'rocmcc/6.4.2-magic',
-            'rocm/6.4.2',
+            'rocmcc/6.4.3beta2-magic',
+            'rocm/6.4.3beta2',
             'cray-mpich/9.0.1',
             'craype-accel-amd-gfx942',
             'cray-python',
             'cray-libsci_acc',
-            'cray-hdf5-parallel/1.14.3.7',
+            'cray-hdf5-parallel/1.14.3.5',
             'flux_wrappers',
         ]
         tuo_defines = {
@@ -65,6 +66,10 @@ def get_machine_config(machine: Machine) -> MachineConfig:
             gpus_per_node = 24
         else:  # gpu mode: TPX
             gpus_per_node = 12
+        petsc_args = [
+            '-vec_type hip',
+            '-coarse_dm_mat_type aijhipsparse'
+        ]
         return MachineConfig(
             gpus_per_node=gpus_per_node,
             bank='uco',
@@ -74,7 +79,8 @@ def get_machine_config(machine: Machine) -> MachineConfig:
             parallel_filesystem=Path('/p/lustre5'),
             packages=tuo_packages,
             defines=tuo_defines,
-            flux_args=[f"--setattr=gpumode={gpu_mode}", "--conf=resource.rediscover=true"]
+            flux_args=[f"--setattr=gpumode={gpu_mode}", "--conf=resource.rediscover=true"],
+            petsc_args=petsc_args
         )
     elif machine == Machine.TIOGA:
         tioga_packages = [
@@ -91,6 +97,10 @@ def get_machine_config(machine: Machine) -> MachineConfig:
             'HSA_XNACK': '1',
             'MPICH_GPU_SUPPORT_ENABLED': '1',
         }
+        petsc_args = [
+            '-vec_type hip',
+            '-coarse_dm_mat_type aijhipsparse'
+        ]
         return MachineConfig(
             gpus_per_node=8,
             bank='uco',
@@ -99,7 +109,8 @@ def get_machine_config(machine: Machine) -> MachineConfig:
             ceed_backend='/gpu/hip/gen',
             parallel_filesystem=Path('/p/lustre2'),
             packages=tioga_packages,
-            defines=tioga_defines)
+            defines=tioga_defines,
+            petsc_args=petsc_args)
     elif machine == Machine.LASSEN:
         lassen_packages = [
             'clang/ibm-18.1.8-cuda-11.8.0-gcc-11.2.1',

@@ -113,7 +113,7 @@ class EfficiencyForcingExperiment(ExperimentConfig):
 
 __doc__ = EfficiencyForcingExperiment.__doc__
 
-app = typer.Typer()
+app = typer.Typer(name="efficiency", help=__doc__)
 
 
 @app.command()

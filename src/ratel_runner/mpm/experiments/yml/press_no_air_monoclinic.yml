@@ -1,0 +1,57 @@
+order: 1
+output_fields_order: 1
+
+method: mpm
+mpm:
+  point_location_type: uniform
+  num_points_per_cell: 64
+  stabilization:
+    type: background_stiffness
+    background_stiffness:
+      model: elasticity-linear
+      E: 20
+      nu: 0.0
+      forcing: none
+  initialization: voxel
+  projection: lumped
+  material: grains,binder
+  binder:
+    model: elasticity-mpm-triclinic-anisotropic-previous
+    Lc: 240,80,80,0,0,0, 240,80,0,0,0, 240,0,0,0, 80,0,0, 80,0, 80
+    n0: 0,0,1
+    theta0: 0
+    rho: 1.190e-9 # tonnes/mm^3 # 1.190e-15 kg/um^3
+    label:
+      value: 1
+  grains:
+    model: elasticity-mpm-triclinic-anisotropic-previous
+    # From Pereverzev, Sewell 2020 (doi:10.3390/cryst10121123)
+    # 300K, 0.1 MPa pressure, elastic coefficients in Voigt notation (MPa)
+    # [
+    #   22.97e3  9.20e3 12.32e3    0    -0.43e3     0
+    #      -    22.62e3 12.37e3    0     4.47e3     0
+    #      -       -    21.67e3    0     1.84e3     0
+    #      -       -       -    8.645e3     0    2.248e3
+    #      -       -       -       -    10.407e3    0
+    #      -       -       -       -        -    9.527e3
+    # ]
+    Lc: 22.97e3,9.20e3,12.32e3,0,-0.43e3,0, 22.62e3,12.37e3,0,4.47e3,0, 21.67e3,0,1.84e3,0, 8.645e3,0,2.248e3, 10.407e3,0, 9.527e3
+    # From Ma et al. 2021 (doi:10.1016/j.ijsolstr.2021.111170)
+    a: 6.53e-7  # 6.53 Å (1e-10m)
+    b: 11.03e-7 # 11.03 Å (1e-10m)
+    c: 7.35e-7  # 7.35 Å (1e-10m)
+    alpha: 90
+    beta: 102.689
+    gamma: 90
+    randomize_orientations: true
+    rho: 2.001e-9 # tonnes/mm^3 # 2.001e-15 kg/um^3
+
+material: dummy
+dummy:
+  model: elasticity-mpm-triclinic-anisotropic-previous
+  skip_checks:
+
+forcing: body
+forcing_body_vector: 0,0,-9810
+
+surface_force_faces: 1,2

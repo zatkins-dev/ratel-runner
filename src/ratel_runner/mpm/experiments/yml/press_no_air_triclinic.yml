@@ -1,0 +1,57 @@
+order: 1
+output_fields_order: 1
+
+method: mpm
+mpm:
+  point_location_type: uniform
+  num_points_per_cell: 64
+  stabilization:
+    type: background_stiffness
+    background_stiffness:
+      model: elasticity-linear
+      E: 20
+      nu: 0.0
+      forcing: none
+  initialization: voxel
+  projection: lumped
+  material: grains,binder
+  binder:
+    model: elasticity-mpm-triclinic-anisotropic-previous
+    Lc: 240,80,80,0,0,0, 240,80,0,0,0, 240,0,0,0, 80,0,0, 80,0, 80
+    n0: 0,0,1
+    theta0: 0
+    rho: 1.190e-9 # tonnes/mm^3 # 1.190e-15 kg/um^3
+    label:
+      value: 1
+  grains:
+    model: elasticity-mpm-triclinic-anisotropic-previous
+    # From Luscher et al. 2014 (doi:10.1088/0965-0393/22/7/075008)
+    # elastic coefficients in Voigt notation (MPa)
+    # [
+    #   65.7e3 18.5e3  4.0e3 -0.2e3 -1.0e3  1.0e3
+    #      -   62.0e3  5.0e3  0.6e3 -0.5e3  1.0e3
+    #      -      -   18.3e3  0.2e3 -0.4e3 -0.4e3
+    #      -      -     -     1.4e3  0.1e3  0.3e3
+    #      -      -     -       -    0.7e3  0.4e3
+    #      -      -     -       -      -   21.6e3
+    # ]
+    Lc: 65.7e3,18.5e3,4.0e3,-0.2e3,-1.0e3,1.0e3, 62.0e3,5.0e3,0.6e3,-0.5e3,1.0e3, 18.3e3,0.2e3,-0.4e3,-0.4e3, 1.4e3,0.1e3,0.3e3, 0.7e3,0.4e3, 21.6e3
+    # From Kolb et al. data ~25 C
+    a: 9.015e-7  # 9.015 Å (1e-10m)
+    b: 9.0325e-7 # 9.0325 Å (1e-10m)
+    c: 6.825e-7  # 6.825 Å (1e-10m)
+    alpha: 108.65
+    beta: 91.98
+    gamma: 119.94
+    randomize_orientations: true
+    rho: 2.001e-9 # tonnes/mm^3 # 2.001e-15 kg/um^3
+
+material: dummy
+dummy:
+  model: elasticity-mpm-triclinic-anisotropic-previous
+  skip_checks:
+
+forcing: body
+forcing_body_vector: 0,0,-9810
+
+surface_force_faces: 1,2

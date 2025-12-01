@@ -27,7 +27,7 @@ def generate(
     output_dir: Optional[Path] = None,
     additional_args: str = "",
     checkpoint_interval: int = 0,
-    skip_hash: bool = False,
+    skip_hash: bool = True,
     original_jobid: Optional[int] = None,
     dependent_jobid: Optional[int] = None
 ) -> tuple[Path, Path]:
@@ -80,7 +80,8 @@ def generate(
 
     ratel = f'{ratel_dir}/bin/ratel-quasistatic'
     if checkpoint_interval > 0:
-        additional_args += f' -ts_monitor_checkpoint $SCRATCH/checkpoint -ts_monitor_checkpoint_interval {checkpoint_interval}'
+        additional_args += f' -ts_monitor_checkpoint $SCRATCH/checkpoint -ts_monitor_checkpoint_toggle -ts_monitor_checkpoint_interval {checkpoint_interval}'
+    additional_args += ' ' + ' '.join(machine_config.petsc_args)
 
     mode = ''
     if machine == Machine.TUOLUMNE:
@@ -190,9 +191,10 @@ def generate(
         'echo ""',
         '',
         *restart_cmds,
-        f'echo "> flux run -N{num_nodes} -n{num_processes} -x --verbose -l --setopt=mpibind=verbose:1 {command} >> "$SCRATCH/run.log" 2>&1"',
+        f'echo "> flux run -N{num_nodes} -n{num_processes} -x --verbose -l --setopt=mpibind=verbose:1 {command} >> "$SCRATCH/run.log" 2>> "$SCRATCH/error.log""',
+        f'on_hang_stat_and_kill --delay 60 --thresh 60 -v \'.\'',
         f'flux run -N{num_nodes} -n{num_processes} -x --verbose -l --setopt=mpibind=verbose:1 \\',
-        f'  {command} >> "$SCRATCH/run.log" 2>&1',
+        f'  {command} >> "$SCRATCH/run.log" 2>> "$SCRATCH/error.log"',
         '',
         'echo ""',
         'echo "-->Simulation finished at $(date)"',

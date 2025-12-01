@@ -28,8 +28,9 @@ class ExperimentConfig(ABC):
     _base_config: str
     _logview: Optional[LogViewType]
 
-    def __init__(self, name: str, description: Optional[str], base_config: str):
+    def __init__(self, name: str, description: Optional[str], base_config: str, pretty_name: Optional[str] = None):
         self._name = name
+        self._pretty_name = pretty_name if pretty_name is not None else name
         self._description = description or ''
         self._base_config = base_config
         self._logview = None
@@ -39,6 +40,10 @@ class ExperimentConfig(ABC):
     @property
     def name(self) -> str:
         return self._name
+
+    @property
+    def pretty_name(self) -> str:
+        return self._pretty_name
 
     @property
     def description(self) -> str:

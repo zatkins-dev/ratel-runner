@@ -36,7 +36,7 @@ rich.reconfigure(theme=custom_theme, soft_wrap=True)
 app = typer.Typer()
 
 
-@app.callback()
+# @app.callback()
 def main(
     ratel_dir: Optional[Path] = None,
     output_dir: Optional[Path] = None,
@@ -64,12 +64,12 @@ if HAVE_MPM:
     # Press experiments
     press_app = typer.Typer()
     mpm_app.add_typer(press_app, name="press", help="Press consolidation experiments")
-    press_app.add_typer(press_sticky_air.app, name="sticky-air", help=press_sticky_air.__doc__)
-    press_app.add_typer(press_no_air.app, name="no-air", help=press_no_air.__doc__)
+    press_app.add_typer(press_sticky_air.app)
+    press_app.add_typer(press_no_air.app)
     perf_app = typer.Typer()
     # Performance experiments
     mpm_app.add_typer(perf_app, name="performance", help="Performance experiments")
-    perf_app.add_typer(efficiency.app, name="efficiency", help=efficiency.__doc__)
+    perf_app.add_typer(efficiency.app)
     mpm_app.add_typer(sweep.app, name="sweep")
 
 if __name__ == "__main__":

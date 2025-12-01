@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 from rich import print
 import os
-from typing import Annotated
+from typing import Annotated, Any, Callable
 from dataclasses import dataclass
 from difflib import get_close_matches
 from rich.table import Table
@@ -34,6 +34,7 @@ class ConfigKey:
     name: str
     description: str
     type: type
+    check: Callable[[Any], bool] = lambda _: True
 
     def __eq__(self, key):
         if isinstance(key, ConfigKey):
@@ -50,6 +51,35 @@ class ConfigKey:
         return self.name
 
 
+class CheckBounded():
+    def __init__(self, lower=None, upper=None, inclusive_lower=False, inclusive_upper=False):
+        assert lower is not None or upper is not None, "One of upper or lower bounds must be set"
+        self.lower = lower
+        self.upper = upper
+        self.inclusive_lower = inclusive_lower
+        self.inclusive_upper = inclusive_upper
+
+    def __str__(self) -> str:
+        if self.lower is None:
+            return f"must be <{('=' if self.inclusive_upper else '')} {self.upper}"
+        if self.upper is None:
+            return f"must be >{('=' if self.inclusive_lower else '')} {self.lower}"
+        bracket_lower = "[" if self.inclusive_lower else "("
+        bracket_upper = "]" if self.inclusive_upper else ")"
+        return f"must be in the interval {bracket_lower}{self.lower}, {self.upper}{bracket_upper}"
+
+    def __call__(self, value) -> bool:
+        good = value is not None
+        if good and self.lower is not None:
+            good = good and (value > self.lower or (self.inclusive_lower and value == self.lower))
+        if good and self.upper is not None:
+            good = good and (value < self.upper or (self.inclusive_upper and value == self.upper))
+        if not good:
+            print(f'[error]value {value} {self}')
+            return False
+        return True
+
+
 _KNOWN_KEYS = {
     "PETSC_DIR": ConfigKey("PETSC_DIR", "PETSc repository directory", Path),
     "PETSC_ARCH": ConfigKey("PETSC_ARCH", "PETSc arch name", Path),
@@ -60,6 +90,12 @@ _KNOWN_KEYS = {
     "OUTPUT_DIR": ConfigKey("OUTPUT_DIR", "Directory in which to place symlinks to output directories", Path),
     "GPU_MODE": ConfigKey("GPU_MODE", "GPU mode, only matters for Tuolumne", GPUMode),
 }
+
+
+def add_key(key_name: str, key: ConfigKey):
+    if key_name in _KNOWN_KEYS.keys():
+        print(f'[warn]{key_name} already registered, overwriting')
+    _KNOWN_KEYS[key_name] = key
 
 
 def _get_config(machine: machines.Machine | None = None):
@@ -140,12 +176,13 @@ def set(key: str, value: str, machine: machines.Machine | None = None, quiet: bo
             print(f"[warn]  Similar keys:[/warn] {' '.join(similar)}")
         raise typer.Exit(1)
     config_key = _KNOWN_KEYS[key]
+    if not config_key.check(config_key.type(value)):
+        raise typer.Abort(f'Error: Invalid value {value} for key {key}')
     config = _get_runtime_config(machine)
     if not quiet:
         if config_key.name in config:
-            print(f"Key {key} already exists. Overwriting value.")
-        else:
-            print(f"Setting {key} to {value}.")
+            print(f"Key {key} already exists. Overwriting value (old: {config[key]})")
+        print(f"Setting {key} to {value}")
     config[config_key.name] = str(config_key.type(value))
 
 
