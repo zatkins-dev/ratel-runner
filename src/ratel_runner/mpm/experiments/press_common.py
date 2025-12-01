@@ -533,15 +533,15 @@ class PressExperiment(ExperimentConfig, ABC):
                 min=0, help="Interval to save surface forces, or 0 to disable")] = 1,
             save_strain_energy: Annotated[int, typer.Option(
                 min=0, help="Interval to save strain energy, or 0 to disable")] = 1,
-            save_swarm: Annotated[int, typer.Option(min=0, help="Interval to save swarm data, or 0 to disable")] = 200,
+            save_swarm: Annotated[int, typer.Option(min=0, help="Interval to save swarm data, or 0 to disable")] = 0,
             save_solution: Annotated[int, typer.Option(
-                min=0, help="Interval to save mesh solution, or 0 to disable")] = 200,
+                min=0, help="Interval to save mesh solution, or 0 to disable")] = 0,
             save_diagnostics: Annotated[int, typer.Option(
-                min=0, help="Interval to save projected diagnostic quantities, or zero to disable")] = 200,
+                min=0, help="Interval to save projected diagnostic quantities, or zero to disable")] = 0,
             save: Annotated[bool, typer.Option(
                 help="Global flag to enable or disable writing diagnostics. If False, nothing will be written")] = True,
             checkpoint: Annotated[int, typer.Option(
-                min=0, help="Interval to save checkpoint files for restarting runs, or zero to disable")] = 20,
+                min=0, help="Interval to save checkpoint files for restarting runs, or zero to disable")] = 0,
             max_time: Annotated[Optional[str], typer.Option(
                 "-t", "--max-time", help="Flux time specification for max job length.")] = None,
             max_restarts: Annotated[int, typer.Option(help="Number of restart jobs to enqueue", min=0)] = 0,

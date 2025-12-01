@@ -30,7 +30,7 @@ class PressNoAirExperiment(PressExperiment):
 
     def __init__(self, *super_args, **super_kwargs):
         super().__init__(*super_args, **super_kwargs, base_name=Path(__file__).stem.replace('_', '-'),
-                         pretty_name="Ratel iMPM Press Experiment, sticky air", description=self.__doc__)
+                         pretty_name="Ratel iMPM Press Experiment, no air, background stabilization", description=self.__doc__)
 
     @property
     def mesh_options(self) -> str:
