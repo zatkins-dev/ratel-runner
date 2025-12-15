@@ -40,12 +40,14 @@ def main(
     """
     Ratel iMPM Experiments
     """
+    config.stash_push(quiet=True)
     if ratel_dir is not None:
         config.set('RATEL_DIR', f"{ratel_dir.resolve()}")
     if output_dir is not None:
         config.set('OUTPUT_DIR', f"{output_dir.resolve()}")
     if scratch_dir is not None:
         config.set('SCRATCH_DIR', f"{scratch_dir.resolve()}")
+    config.stash_pop(quiet=True)
 
 
 # Press experiments
