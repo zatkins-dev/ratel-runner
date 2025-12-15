@@ -1,3 +1,4 @@
+from platform import machine
 import typer
 import json
 from pathlib import Path
@@ -8,13 +9,23 @@ from dataclasses import dataclass
 from difflib import get_close_matches
 from rich.table import Table
 from enum import Enum
+from copy import deepcopy
+from contextlib import contextmanager
 
 from .flux import machines
 
 __all__ = ['get_app_dir', 'get', 'set', 'unset', 'get_fallback', 'app']
 
 
-_configuration = None
+class FileOpenMode(Enum):
+    READ = 'r'
+    WRITE = 'w'
+
+    def __str__(self):
+        return self.value
+
+    def __repr__(self):
+        return self.value
 
 
 class GPUMode(Enum):
@@ -98,13 +109,22 @@ def add_key(key_name: str, key: ConfigKey):
     _KNOWN_KEYS[key_name] = key
 
 
-def _get_config(machine: machines.Machine | None = None):
+def _get_config(machine: machines.Machine | None = None, name: str | None = None):
     """
     Get the configuration file, creating it if it does not exist.
     """
     if machine is None:
         machine = machines.detect_machine()
     app_dir = get_app_dir()
+    if name is not None:
+        config_file = Path(name)
+        if not config_file.is_absolute():
+            config_file = app_dir / config_file
+        if not config_file.exists():
+            config_file.parent.mkdir(parents=True, exist_ok=True)
+            config = {}
+            config_file.write_text(json.dumps(config, indent=2))
+        return config_file
     if machine is None or machine == machines.Machine.DEFAULT:
         config_file = app_dir / "config.json"
     else:
@@ -116,32 +136,22 @@ def _get_config(machine: machines.Machine | None = None):
     return config_file
 
 
-def _get_runtime_config(machine: machines.Machine | None = None) -> dict:
+@contextmanager
+def runtime_config(mode: FileOpenMode, machine: machines.Machine | None = None):
     """
     Read/write values in the application configuration file.
     """
     if machine is None:
         machine = machines.detect_machine()
-    global _configuration
-    if _configuration is None:
-        _configuration = dict()
-    if _configuration.get(machine, None) is not None:
-        return _configuration[machine]
     config_path = _get_config(machine)
-    _configuration[machine] = json.loads(config_path.read_text())
-    return _configuration[machine]
+    configuration = json.loads(config_path.read_text())
+    yield configuration
+    if mode == FileOpenMode.WRITE:
+        config_path.write_text(json.dumps(configuration, indent=2))
+    del configuration
 
 
-def _write_runtime_config(ctx: typer.Context, **kwargs):
-    global _configuration
-    if not _configuration:
-        return
-    for machine, config in _configuration.items():
-        config_file = _get_config(machine)
-        config_file.write_text(json.dumps(config, indent=2))
-
-
-app = typer.Typer(callback=_get_runtime_config, result_callback=_write_runtime_config)
+app = typer.Typer(help="Manage Ratel Runner runtime configuration")
 
 
 def get_app_dir():
@@ -152,9 +162,9 @@ def unset(key: str, machine: machines.Machine | None = None):
     """
     Remove a key from the runtime configuration.
     """
-    config = _get_runtime_config(machine=machine)
-    if key in config:
-        del config[key]
+    with runtime_config(FileOpenMode.WRITE, machine=machine) as config:
+        if key in config:
+            del config[key]
 
 
 @app.command('unset')
@@ -178,12 +188,12 @@ def set(key: str, value: str, machine: machines.Machine | None = None, quiet: bo
     config_key = _KNOWN_KEYS[key]
     if not config_key.check(config_key.type(value)):
         raise typer.Abort(f'Error: Invalid value {value} for key {key}')
-    config = _get_runtime_config(machine)
-    if not quiet:
-        if config_key.name in config:
-            print(f"Key {key} already exists. Overwriting value (old: {config[key]})")
-        print(f"Setting {key} to {value}")
-    config[config_key.name] = str(config_key.type(value))
+    with runtime_config(FileOpenMode.WRITE, machine=machine) as config:
+        if not quiet:
+            if config_key.name in config:
+                print(f"Key {key} already exists. Overwriting value (old: {config[key]})")
+            print(f"Setting {key} to {value}")
+        config[config_key.name] = str(config_key.type(value))
 
 
 @app.command('set')
@@ -194,36 +204,42 @@ def set_cmd(key: str, value: str, machine: machines.Machine | None = None):
     set(key, value, machine=machine, quiet=False)
 
 
-def get(key: str, machine: machines.Machine | None = None):
+def get(key: str, machine: machines.Machine | None = None, quiet: bool = True):
     """
     Internal helper function to get the value of a key from the config file.
     """
     if key not in _KNOWN_KEYS.keys():
-        print(f"[warn]Unknown key:[/warn] {key}")
+        if not quiet:
+            print(f"[warn]Unknown key:[/warn] {key}")
         similar = get_close_matches(key, _KNOWN_KEYS.keys())
-        if len(similar):
+        if len(similar) and not quiet:
             print(f"[warn]  Similar keys:[/warn] {' '.join(similar)}")
         raise typer.Exit(1)
     config_key = _KNOWN_KEYS[key]
-    config = _get_runtime_config(machine)
-    value = config.get(key, None)
+    with runtime_config(FileOpenMode.READ, machine=machine) as config:
+        value = config.get(key, None)
     return config_key.type(value) if value else None
 
 
 @app.command('get')
-def get_cmd(key: str, machine: machines.Machine | None = None):
+def get_cmd(key: str, machine: machines.Machine | None = None,
+            script: Annotated[bool, typer.Option("-s", help="Output only the value")] = False):
     """
     Get the value of a key in the configuration file.
     """
-    val = get(key, machine=machine)
-    print(f"{key}: ", "Key not found." if val is None else val)
+    val = get(key, machine=machine, quiet=script)
+    if script:
+        if val is None:
+            raise typer.Exit(1)
+        print(val)
+    else:
+        print(f"{key}: ", "Key not found." if val is None else val)
 
 
-def list(machine: machines.Machine | None = None):
+def print_config(config: dict):
     """
-    List all keys in the configuration file.
+    Print the configuration in a human-readable format.
     """
-    config = _get_runtime_config(machine)
     if len(config) == 0:
         print("[success]Configuration empty, use[/success] `config set` [success]to add configuration variables")
     else:
@@ -235,12 +251,20 @@ def list(machine: machines.Machine | None = None):
         print(table)
 
 
+def list_config(machine: machines.Machine | None = None):
+    """
+    List all keys in the configuration file.
+    """
+    with runtime_config(FileOpenMode.READ, machine=machine) as config:
+        print_config(config)
+
+
 @app.command('list')
 def list_cmd(machine: machines.Machine | None = None):
     """
     List all keys and values in the configuration file.
     """
-    list(machine=machine)
+    list_config(machine=machine)
 
 
 @app.command('copy')
@@ -248,11 +272,40 @@ def copy_cmd(src: machines.Machine, dst: Annotated[machines.Machine | None, type
     """
     Copy all configuration variables from one machine to another
     """
-    config_from: dict = _get_runtime_config(src)
-    config_to: dict = _get_runtime_config(dst)
-    config_to.clear()
-    for key, value in config_from.items():
-        config_to[key] = value
+    with runtime_config(FileOpenMode.READ, machine=src) as src_config:
+        with runtime_config(FileOpenMode.WRITE, machine=dst) as dst_config:
+            dst_config.clear()
+            for key, value in src_config.items():
+                dst_config[key] = value
+
+
+@app.command('dump')
+def dump_cmd(dst: Path, machine: machines.Machine | None = None):
+    """
+    Dump the configuration file as JSON
+    """
+    full_dst = dst.resolve()
+    full_dst.parent.mkdir(parents=True, exist_ok=True)
+    with runtime_config(FileOpenMode.READ, machine=machine) as config:
+        full_dst.write_text(json.dumps(config, indent=2))
+    print(f'[success]Wrote configuration to {full_dst}[/success]')
+
+
+@app.command('load')
+def load_cmd(src: Path, machine: machines.Machine | None = None):
+    """
+    Load the configuration file from JSON
+    """
+    full_src = src.resolve()
+    if not full_src.exists():
+        print(f'[error]Source file {full_src} does not exist[/error]')
+        raise typer.Exit(1)
+    config_data = json.loads(full_src.read_text())
+    with runtime_config(FileOpenMode.WRITE, machine=machine) as config:
+        config.clear()
+        for key, value in config_data.items():
+            config[key] = value
+    print(f'[success]Loaded configuration from {full_src}[/success]')
 
 
 def get_fallback(key: str, default=None, machine: machines.Machine | None = None):
@@ -270,3 +323,150 @@ def get_fallback(key: str, default=None, machine: machines.Machine | None = None
     else:
         raise ValueError(
             f"{key} not set. Please set the {key} environment variable or use the config command to set it.")
+
+
+stash_app = typer.Typer()
+app.add_typer(stash_app, name='stash', help='Stash and apply runtime configurations')
+
+
+@contextmanager
+def stash(mode: FileOpenMode = FileOpenMode.WRITE, machine: machines.Machine | None = None):
+    """
+    Context manager for stashed configurations
+    """
+    app_dir = get_app_dir()
+    if machine is None or machine == machines.Machine.DEFAULT:
+        stash_path = app_dir / "stashes.json"
+    else:
+        stash_path = app_dir / f'{machine.value.lower()}' / "stashes.json"
+    stash_path = stash_path
+    stash_data = json.loads(stash_path.read_text())
+    yield stash_data
+    if mode == FileOpenMode.WRITE:
+        stash_path.write_text(json.dumps(stash_data, indent=2))
+    del stash_data
+
+
+@stash_app.command('push')
+def stash_push(name: Annotated[str | None, typer.Argument()] = None,
+               machine: machines.Machine | None = None, quiet: bool = False):
+    """
+    Stash the current configuration under a given name
+    """
+    with stash(mode=FileOpenMode.WRITE, machine=machine) as stash_data:
+        with runtime_config(FileOpenMode.READ, machine=machine) as config:
+            if name is None:
+                name = f'stash-{len(stash_data["stashes"])+1}'
+            stash_data['stashes'][name] = deepcopy(config)
+            stash_data['stack'].append(name)
+            if not quiet:
+                print(f'Stashed current configuration as [bold]{name}[/bold]')
+
+
+@stash_app.command('apply')
+def stash_apply(name: Annotated[str | None, typer.Argument()] = None,
+                machine: machines.Machine | None = None, quiet: bool = False) -> str:
+    """
+    Apply the stashed configuration with the given name
+    """
+    with stash(mode=FileOpenMode.READ, machine=machine) as stash_data:
+        with runtime_config(FileOpenMode.WRITE, machine=machine) as config:
+            if name is None:
+                if len(stash_data['stack']) == 0:
+                    if not quiet:
+                        print('[error]No stashed configurations to apply[/error]')
+                    raise typer.Exit(1)
+                resolved_name: str = stash_data['stack'][-1]
+            else:
+                resolved_name = name
+            if resolved_name not in stash_data['stashes']:
+                print(f'[error]No stashed configuration with name {resolved_name}[/error]')
+                raise typer.Exit(1)
+            stashed_config = stash_data['stashes'][resolved_name]
+            config.clear()
+            for key, value in stashed_config.items():
+                config[key] = value
+            if not quiet:
+                print(f'Applied stashed configuration [bold]{resolved_name}[/bold]:')
+                print_config(config)
+    return resolved_name
+
+
+@stash_app.command('remove')
+def stash_remove(name: str, machine: machines.Machine | None = None):
+    """
+    Remove the stashed configuration with the given name without applying it
+    """
+    with stash(mode=FileOpenMode.WRITE, machine=machine) as stash_data:
+        if name not in stash_data['stashes']:
+            print(f'[error]No stashed configuration with name {name}[/error]')
+            raise typer.Exit(1)
+        stash_data['stack'].remove(name)
+        del stash_data['stashes'][name]
+
+
+@stash_app.command('pop')
+def stash_pop(name: Annotated[str | None, typer.Argument()] = None,
+              machine: machines.Machine | None = None, quiet: bool = False):
+    """
+    Apply the stashed configuration with the given name and remove it from the stash
+    """
+    name = stash_apply(name=name, machine=machine, quiet=quiet)
+    stash_remove(name=name, machine=machine)
+
+
+@stash_app.command('show')
+def stash_show(name: str, machine: machines.Machine | None = None, quiet: bool = False):
+    """
+    Show the stashed configuration with the given name without applying it
+    """
+    with stash(mode=FileOpenMode.READ, machine=machine) as stash_data:
+        if name not in stash_data['stashes']:
+            print(f'[error]No stashed configuration with name {name}[/error]')
+            raise typer.Exit(1)
+        stashed_config = stash_data['stashes'][name]
+        if not quiet:
+            print(f'Stashed configuration [bold]{name}[/bold]:')
+            print_config(stashed_config)
+
+
+@stash_app.command('peek')
+def stash_peek(machine: machines.Machine | None = None):
+    """
+    Show the most recently stashed configuration without applying it
+    """
+    with stash(mode=FileOpenMode.READ, machine=machine) as stash_data:
+        if len(stash_data['stack']) == 0:
+            print('[error]No stashed configurations to show[/error]')
+            raise typer.Exit(1)
+        name = stash_data['stack'][-1]
+        stashed_config = stash_data['stashes'][name]
+        print(f'Stashed configuration [bold]{name}[/bold]:')
+        print_config(stashed_config)
+
+
+@stash_app.command('list')
+def stash_list(machine: machines.Machine | None = None):
+    """
+    List all stashed configurations
+    """
+    with stash(mode=FileOpenMode.READ, machine=machine) as stash_data:
+        if len(stash_data['stashes']) == 0:
+            print('[success]No stashed configurations[/success]')
+            return
+        table = Table("Index", "Name")
+        for order, name in enumerate(stash_data['stack'][::-1], start=1):
+            table.add_row(str(order), f'[bold]{name}[/bold]')
+        print(table)
+
+
+@stash_app.command('clear')
+def stash_clear(machine: machines.Machine | None = None, quiet: bool = False):
+    """
+    Clear all stashed configurations
+    """
+    with stash(mode=FileOpenMode.WRITE, machine=machine) as stash_data:
+        stash_data['stack'] = []
+        stash_data['stashes'] = {}
+    if not quiet:
+        print('[success]Cleared all stashed configurations[/success]')
