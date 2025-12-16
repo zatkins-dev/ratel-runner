@@ -10,6 +10,7 @@ from typing import Annotated, Optional, ClassVar
 from abc import ABC, abstractmethod
 from types import SimpleNamespace
 import pandas as pd
+import math
 
 from ...helper.experiment import ExperimentConfig, LogViewType
 from ...helper import config
@@ -700,32 +701,41 @@ class PressExperiment(ExperimentConfig, ABC):
         def flux_strong_scaling(
             ctx: typer.Context,
             num_processes: Annotated[list[int], typer.Argument(min=1)],
-            num_steps: int = 5,
+            num_steps: Annotated[int, typer.Option(min=1, help="Number of time steps to run")] = 20,
+            num_samples: Annotated[int, typer.Option(min=1, help="Number of runs at each process count")] = 1,
+            output_name: Annotated[Optional[Path], typer.Option(help="Directory to save results")] = None,
+            args: Annotated[Optional[list[str]], typer.Option('-a',
+                                                              help="Additional arguments to pass to the experiment")] = None,
         ):
             """Run a parameter sweep using the Flux job scheduler.
 
             Hint: See `ratel-runner mpm press [EXPERIMENT] --help` for all options
             """
+            output_dir = Path(config.get_fallback('OUTPUT_DIR', Path.cwd() / 'output'))
+            if output_name is not None:
+                output_dir = output_dir / output_name
             ctx.obj.experiment._name = ctx.obj.experiment._name + "-scaling"
+            base_name = ctx.obj.experiment._name
             ctx.obj.experiment.user_options = ctx.args + [
                 "--preload",
                 "--ts_max_steps", f"{num_steps}"
-            ]
+            ] + (args if args else [])
+
+            max_length = int(math.ceil(math.log10(max(num_processes) + 1)))
             for np in num_processes:
-                if ctx.obj.dry_run:
+                for sample in range(num_samples):
+                    np_str = f"{np}".zfill(max_length)
+                    ctx.obj.experiment._name = base_name + f"-np{np_str}" + (f"-s{sample+1}" if num_samples > 1 else "")
                     script_file, _ = flux.generate(
                         ctx.obj.experiment,
                         machine=ctx.obj.machine,
                         num_processes=np,
                         max_time=ctx.obj.max_time,
+                        output_dir=output_dir,
                     )
-                    print(f"Generated script saved to", script_file)
-                    print("Dry run, exiting.")
-                else:
-                    flux.submit_series(
-                        ctx.obj.experiment,
-                        machine=ctx.obj.machine,
-                        num_processes=np,
-                        max_time=ctx.obj.max_time,
-                    )
+                    if ctx.obj.dry_run:
+                        print(f"Generated script saved to", script_file)
+                        print("Dry run, exiting.")
+                    else:
+                        flux.run(script_file)
         return app
