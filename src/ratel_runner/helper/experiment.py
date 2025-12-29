@@ -121,7 +121,6 @@ class ExperimentConfig(ABC):
                 config += '\n' + '\n'.join([
                     f'log_view: :log_view{self.logview.to_petsc()}',
                     'log_view_gpu_time:',
-                    # 'log_view_memory:'
                 ])
         return config
 

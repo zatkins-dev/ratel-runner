@@ -9,12 +9,17 @@ from typing import Optional
 from .helper import build, config
 
 try:
-    from .mpm.experiments import press_no_air, press_sticky_air, efficiency
-    from .mpm import sweep
+    from .mpm.main import app as mpm_app
     HAVE_MPM = True
 except ImportError:
     HAVE_MPM = False
 
+
+try:
+    from .postprocess.main import app as postprocess_app
+    HAVE_POSTPROCESS = True
+except ImportError:
+    HAVE_POSTPROCESS = False
 
 custom_theme = Theme({
     "info": "dim white",
@@ -58,19 +63,20 @@ app.add_typer(config.app, name="config")
 app.add_typer(build.app, name="build")
 
 if HAVE_MPM:
-    mpm_app = typer.Typer()
     app.add_typer(mpm_app, name="mpm", help="Run iMPM Experiments")
 
-    # Press experiments
-    press_app = typer.Typer()
-    mpm_app.add_typer(press_app, name="press", help="Press consolidation experiments")
-    press_app.add_typer(press_sticky_air.app)
-    press_app.add_typer(press_no_air.app)
-    perf_app = typer.Typer()
-    # Performance experiments
-    mpm_app.add_typer(perf_app, name="performance", help="Performance experiments")
-    perf_app.add_typer(efficiency.app)
-    mpm_app.add_typer(sweep.app, name="sweep")
+if HAVE_POSTPROCESS:
+    app.add_typer(postprocess_app, name="postprocess", help="Post-process iMPM Experiments")
+    # # Press experiments
+    # press_app = typer.Typer()
+    # mpm_app.add_typer(press_app, name="press", help="Press consolidation experiments")
+    # press_app.add_typer(press_sticky_air.app)
+    # press_app.add_typer(press_no_air.app)
+    # mpm_app.add_typer(sweep.app, name="sweep")
+    # perf_app = typer.Typer()
+    # # Performance experiments
+    # mpm_app.add_typer(perf_app, name="performance", help="Performance experiments")
+    # perf_app.add_typer(efficiency.app)
 
 if __name__ == "__main__":
     app()

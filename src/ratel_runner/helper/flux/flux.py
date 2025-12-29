@@ -145,9 +145,9 @@ def generate(
         f'#flux: -B {machine_config.bank}',
         '#flux: --setattr=thp=always # Transparent Huge Pages',
         '#flux: -l # Add task rank prefixes to each line of output.',
+        *[f'#flux: {arg}' for arg in machine_config.flux_args],
         ('#flux: --setattr=hugepages=512GB' if machine == Machine.TUOLUMNE else ''),
         (f'#flux: --dependency=afterany:{fluid_encode(dependent_jobid)}' if is_restart else ''),  # type: ignore
-        *[f'#flux: {arg}' for arg in machine_config.flux_args],
         '',
         'echo "~~~~~~~~~~~~~~~~~~~"',
         'echo "Welcome!"',

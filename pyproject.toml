@@ -1,6 +1,6 @@
 [project]
 name = "ratel-runner"
-version = "0.5.0"
+version = "0.6.0"
 description = "Utilities for building and running the Ratel finite element library"
 authors = [
     {name = "Zach Atkins",email = "zach.atkins@colorado.edu"}
@@ -33,7 +33,12 @@ requires-python = ">=3.9,<4.0"
 dependencies = [
     "typer<1.0.0,>=0.15.2",
 ]
-optional-dependencies = { mpm = ["gmsh<5.0.0,>=4.13.1", "pandas<3.0.0,>=2.2.3", "pyyaml>=6.0.2,<7.0.0"] }
+optional-dependencies = { mpm = ["gmsh<5.0.0,>=4.13.1", "pandas<3.0.0,>=2.2.3", "pyyaml>=6.0.2,<7.0.0"], postprocess = [
+    "matplotlib>=3.9.4",
+    "numpy>=2.0.2",
+    "orix>=0.13.0",
+    "pyvista>=0.46.4",
+] }
 
 [project.urls]
 # Homepage = "https://example.com"

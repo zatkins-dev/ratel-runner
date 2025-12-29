@@ -45,8 +45,8 @@ def get_machine_config(machine: Machine) -> MachineConfig:
     if machine == Machine.TUOLUMNE:
         tuo_packages = [
             'PrgEnv-amd',
-            'rocmcc/6.4.3beta2-magic',
-            'rocm/6.4.3beta2',
+            'rocmcc/6.4.3-magic',
+            'rocm/6.4.3',
             'cray-mpich/9.0.1',
             'craype-accel-amd-gfx942',
             'cray-python',
