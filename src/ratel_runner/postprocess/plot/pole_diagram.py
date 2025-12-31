@@ -1,40 +1,44 @@
-import numpy as np
-from matplotlib import pyplot as plt
+from importlib.util import find_spec
 from pathlib import Path
-import pyvista as pv
+import yaml
 from rich import print
 import typer
 
-import yaml
+from ...helper.utilities import run_once
 
-from orix.vector import Miller, Vector3d
-from orix.quaternion import Orientation, Misorientation, symmetry
-from diffpy.structure import Lattice, Structure
-from orix.crystal_map import Phase
-from orix import plot, data
+
+@run_once
+def check_imports():
+    missing = []
+    for module in ['matplotlib', 'pyvista', 'yaml', 'orix', 'diffpy', 'numpy']:
+        if find_spec(module) is None:
+            missing.append(module)
+    if missing:
+        raise ModuleNotFoundError(
+            f"Missing required modules for pole diagram plotting: {', '.join(missing)}. "
+            "Please install the 'ratel-impm-press[pole-diagram]' extra to use this feature."
+        )
+
+
+@run_once
+def import_all():
+    global plt, pv, Figure, np
+    import matplotlib.pyplot as plt
+    from matplotlib.figure import Figure
+    import pyvista as pv
+    import numpy as np
+    global Phase, Lattice, Structure, Orientation, Misorientation, symmetry, Miller, Vector3d
+    from orix.crystal_map import Phase
+    from diffpy.structure import Lattice, Structure
+    from orix.quaternion import Orientation, Misorientation, symmetry
+    from orix.vector import Miller, Vector3d
+    import orix.plot
+
+
+check_imports()
+
 
 app = typer.Typer()
-
-# We'll want our plots to look a bit larger than the default size
-plt.rcParams.update(
-    {
-        "figure.figsize": (10, 5),
-        "lines.markersize": 2,
-        "font.size": 15,
-        "axes.grid": False,
-    }
-)
-w, h = plt.rcParams["figure.figsize"]
-
-monoclinic = Phase(
-    point_group=symmetry.C2h,
-    structure=Structure(lattice=Lattice(6.53, 11.03, 7.35, 90, 102.689, 90)),
-)
-
-triclinic = Phase(
-    point_group=symmetry.C1,
-    structure=Structure(lattice=Lattice(9.015, 9.0325, 6.825, 108.65, 91.98, 119.94)),
-)
 
 
 def vec_rotate(n, theta, v):
@@ -45,69 +49,69 @@ def vec_rotate(n, theta, v):
     return v_rot
 
 
-def plot_orientations(orientation_axes, orientation_angles, orientation_axes0,
-                      orientation_angles0, phase, out="orientations.png"):
-    O0 = Orientation.from_axes_angles(Vector3d(orientation_axes0), orientation_angles0, symmetry=phase.point_group)
-    mO = Misorientation.from_axes_angles(Vector3d(orientation_axes), orientation_angles)
-    O = mO * O0
-    g = Miller(hkl=[0, 0, 1], phase=phase)
-    g = g.symmetrise(unique=True)
-    poles0 = O0.inv().outer(g, lazy=True, progressbar=True, chunk_size=2000)  # type: ignore
-    poles = O.inv().outer(g, lazy=True, progressbar=True, chunk_size=2000)  # type: ignore
-    alpha = 10000 / orientation_axes.shape[0]
-
-    fig = plt.figure(figsize=(2 * h, 2 * h))
-    subplot_kw = {"projection": "stereographic"}
-
-    ax0 = fig.add_subplot(221, **subplot_kw)
-    ax0.scatter(poles0, alpha=alpha)  # type: ignore
-    ax0.set_title("Initial")
-
-    ax1 = fig.add_subplot(222, **subplot_kw)
-    ax1.pole_density_function(poles0)  # type: ignore
-    ax1.set_title("Initial")
-
-    ax2 = fig.add_subplot(223, **subplot_kw)
-    ax2.scatter(poles, alpha=alpha)  # type: ignore
-    ax2.set_title("Deformed")
-
-    ax3 = fig.add_subplot(224, **subplot_kw)
-    ax3.pole_density_function(poles)  # type: ignore
-    ax3.set_title("Deformed")
-    plt.savefig(out)
-
-
 def read_mesh(file, time_step=0):
     """Read a mesh from a file."""
     reader: pv.XdmfReader = pv.get_reader(file)  # type: ignore
     reader.set_active_time_point(time_step)
+    reader.disable_all_point_arrays()
+    reader.enable_point_array("material")
+    reader.enable_point_array("elastic parameters")
+    reader.enable_point_array("model state")
     mesh: pv.DataSet = reader.read()
     grains = mesh.threshold(1.5, scalars='material', method='upper', preference='point')
     del mesh
     return grains
 
 
-def compute_poles(mesh: pv.DataSet):
+def pole_plot_bounds(
+    poles,
+    resolution: float = 1,
+    sigma: float = 5,
+    log: bool = False,
+):
+    from orix import measure  # pep8-ignore
+    hist, _ = measure.pole_density_function(
+        poles,
+        resolution=resolution,
+        sigma=sigma,
+        log=log,
+        hemisphere="upper",
+    )
+    vmin = hist.min()
+    vmax = hist.max()
+    hist, _ = measure.pole_density_function(
+        poles,
+        resolution=resolution,
+        sigma=sigma,
+        log=log,
+        hemisphere="lower",
+    )
+    vmin = min(vmin, hist.min())
+    vmax = max(vmax, hist.max())
+    return vmin, vmax
+
+
+def compute_poles(mesh):
     props = np.asarray(mesh.point_data["elastic parameters"])
     state = np.asarray(mesh.point_data["model state"])
     npts = props.shape[0]
-    print(f"Computing pole orientations for {npts} points.")
+    print(f"Computing pole orientations for {npts} points...")
     F = state.reshape((npts, 3, 3)) + np.eye(3)
     Finv = np.linalg.inv(F)
+    J = np.linalg.det(F)
     n0 = props[:, 21:24]
     theta0 = props[:, 24]
     V = np.zeros_like(n0)
     V[:, 2] = 1.
     ab_normal0 = vec_rotate(n0, theta0, V)
-    # n_tilde = F^-T * n0
-    ab_normal = np.einsum("ijk,ij->ik", Finv, ab_normal0)
-    ab_normal /= np.linalg.norm(ab_normal, axis=1, keepdims=True)
-    orientation_axes = np.cross(ab_normal0, ab_normal)
-    axes = orientation_axes / np.linalg.norm(orientation_axes, axis=1, keepdims=True)
-    angles = np.arccos(np.einsum("ij,ij->i", ab_normal, ab_normal0))
-    axes0 = n0
-    angles0 = theta0
-    return axes, angles, axes0, angles0
+    ab_normal = J[:, None] * np.einsum("ijk,ij->ik", Finv, ab_normal0)
+    vab0 = Vector3d(ab_normal0)
+    vab = Vector3d(ab_normal)
+    axes = vab0.cross(vab)
+    axes /= axes.norm
+    angles = vab0.angle_with(vab)
+    print(f"Computed pole orientations for {axes.shape[0]} points.")
+    return axes, angles, Vector3d(n0), theta0
 
 
 @app.command()
@@ -115,9 +119,31 @@ def pole_diagram(
     run_dir: Path,
     swarm_file: str = "swarm.xdmf",
     time_step: int = 0,
-    out: str = "orientations.png",
+    log: bool = False,
+    out: Path = Path("orientations.png"),
 ):
     """Plot pole diagrams from swarm data."""
+    import_all()
+
+    plt.rcParams.update(
+        {
+            "figure.figsize": (5, 5),
+            "lines.markersize": 2,
+            "font.size": 15,
+            "axes.grid": False,
+        }
+    )
+
+    monoclinic = Phase(
+        point_group=symmetry.C2h,
+        structure=Structure(lattice=Lattice(6.53, 11.03, 7.35, 90, 102.689, 90)),
+    )
+
+    triclinic = Phase(
+        point_group=symmetry.C1,
+        structure=Structure(lattice=Lattice(9.015, 9.0325, 6.825, 108.65, 91.98, 119.94)),
+    )
+
     swarm_file_path = run_dir / swarm_file
     if not swarm_file_path.exists():
         if swarm_file_path.with_suffix(".xmf").exists():
@@ -129,9 +155,9 @@ def pole_diagram(
         data = yaml.full_load(file)
     try:
         grain_options = data['mpm']['grains']
-        a = grain_options['a'] * 1e7  # convert to angstroms
-        b = grain_options['b'] * 1e7  # convert to angstroms
-        c = grain_options['c'] * 1e7  # convert to angstroms
+        a = grain_options['a']
+        b = grain_options['b']
+        c = grain_options['c']
         alpha = grain_options['alpha']
         beta = grain_options['beta']
         gamma = grain_options['gamma']
@@ -150,7 +176,7 @@ def pole_diagram(
             print(f"Using triclinic phase with lattice parameters: {a}, {b}, {c}, {alpha}, {beta}, {gamma}")
         else:
             raise ValueError("Unsupported lattice parameters for pole figure plotting.")
-    except KeyError | ValueError:
+    except (KeyError, ValueError):
         # guess
         if "monoclinic" in f'{run_dir}':
             phase = monoclinic
@@ -159,10 +185,60 @@ def pole_diagram(
             phase = triclinic
             print(f"Using triclinic phase with lattice parameters: {phase.structure.lattice}")
 
-    axes, angles, axes0, angles0 = compute_poles(read_mesh(run_dir / swarm_file, time_step=time_step))  # type: ignore
-    print(f"Computed pole orientations for {axes.shape[0]} points.")
-    plot_orientations(axes, angles, axes0, angles0, phase, out=out)
-    print(f"Saved pole figure to {out}.")
+    axes, angles, axes0, angles0 = compute_poles(read_mesh(run_dir / swarm_file, time_step=time_step))
+
+    O0 = Orientation.from_axes_angles(axes0, angles0, symmetry=phase.point_group)
+    g = Miller(hkl=[0, 0, 1], phase=phase).symmetrise(unique=True)
+    poles0: Vector3d = O0.inv().outer(g, lazy=True, chunk_size=200000)  # type: ignore
+    poles: Vector3d = (Misorientation.from_axes_angles(axes, angles) * O0).inv().outer(  # type: ignore
+        g,  # type: ignore
+        lazy=True,
+        chunk_size=200000
+    )  # type: ignore
+
+    w, h = plt.rcParams["figure.figsize"]
+
+    plot_args = dict(resolution=1, sigma=5, log=log)
+
+    vmin, vmax = pole_plot_bounds(poles0, **plot_args)  # type: ignore
+    vmin2, vmax2 = pole_plot_bounds(poles, **plot_args)  # type: ignore
+    vmin = min(vmin, vmin2)
+    vmax = max(vmax, vmax2)
+
+    out_init = out.parent / f"{out.stem}_initial{out.suffix}"
+    out_deformed = out.parent / f"{out.stem}_deformed{out.suffix}"
+    fig1: Figure = poles0.pole_density_function(
+        **plot_args,  # type: ignore
+        hemisphere='both',
+        colorbar=False,
+        vmin=vmin, vmax=vmax,
+        axes_labels=["X", "Y", None],  # type: ignore
+        return_figure=True,
+        figure_kwargs={"figsize": (2 * w, h)}
+    )  # type: ignore
+    fig1.suptitle("Initial")
+    fig1.tight_layout()
+    fig1.colorbar(fig1.axes[-1].collections[-1], ax=fig1.axes,
+                  label='log(MRD)' if plot_args['log'] else 'MRD')  # type: ignore
+    fig1.savefig(out_init, dpi=300)
+    print(f"Saved initial pole figure to {out_init}.")
+
+    fig2: Figure = poles.pole_density_function(
+        **plot_args,  # type: ignore
+        hemisphere='both',
+        colorbar=False,
+        vmin=vmin, vmax=vmax,
+        axes_labels=["X", "Y", None],  # type: ignore
+        return_figure=True,
+        figure_kwargs={"figsize": (2 * w, h)}
+    )  # type: ignore
+    fig2.suptitle("Deformed")
+    fig2.tight_layout()
+    fig2.colorbar(fig2.axes[-1].collections[-1], ax=fig2.axes,
+                  label='log(MRD)' if plot_args['log'] else 'MRD')  # type: ignore
+    fig2.savefig(out_deformed, dpi=300)
+    print(f"Saved deformed pole figure to {out_deformed}.")
+    plt.close()
 
 
 if __name__ == "__main__":
