@@ -1,4 +1,3 @@
-from platform import machine
 import typer
 import json
 from pathlib import Path
@@ -6,13 +5,15 @@ from rich import print
 import os
 from typing import Annotated, Any, Callable
 from dataclasses import dataclass
-from difflib import get_close_matches
 from rich.table import Table
 from enum import Enum
 from copy import deepcopy
 from contextlib import contextmanager
 
 from .flux import machines
+from .utilities import LazyImporter
+
+difflib = LazyImporter('difflib')
 
 __all__ = ['get_app_dir', 'get', 'set', 'unset', 'get_fallback', 'app']
 
@@ -181,7 +182,7 @@ def set(key: str, value: str, machine: machines.Machine | None = None, quiet: bo
     """
     if key not in _KNOWN_KEYS.keys():
         print(f"[warn]Unknown key:[/warn] {key}")
-        similar = get_close_matches(key, _KNOWN_KEYS.keys())
+        similar = difflib.get_close_matches(key, _KNOWN_KEYS.keys())
         if len(similar):
             print(f"[warn]  Similar keys:[/warn] {' '.join(similar)}")
         raise typer.Exit(1)
@@ -211,7 +212,7 @@ def get(key: str, machine: machines.Machine | None = None, quiet: bool = True):
     if key not in _KNOWN_KEYS.keys():
         if not quiet:
             print(f"[warn]Unknown key:[/warn] {key}")
-        similar = get_close_matches(key, _KNOWN_KEYS.keys())
+        similar = difflib.get_close_matches(key, _KNOWN_KEYS.keys())
         if len(similar) and not quiet:
             print(f"[warn]  Similar keys:[/warn] {' '.join(similar)}")
         raise typer.Exit(1)
