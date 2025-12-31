@@ -3,7 +3,7 @@ import yaml
 import rich
 import re
 from pathlib import Path
-from typing import Annotated
+from typing import Union
 import typer
 
 __doc__ = "Load and write sweep specifications for Ratel iMPM experiments"
@@ -37,14 +37,14 @@ class ParameterRange:
         return [self.start + i * step for i in range(self.count)]
 
 
-def range_representer(dumper: yaml.Dumper, data: ParameterRange) -> str:
+def range_representer(dumper: yaml.Dumper, data: ParameterRange) -> yaml.ScalarNode:
     """
     String representation of a range in the format start:end:count.
     """
     return dumper.represent_scalar("!parameter_range", f"{data.start}:{data.end}:{data.count}")
 
 
-def range_parser(loader: yaml.Loader, node: yaml.Node) -> ParameterRange:
+def range_parser(loader: Union[yaml.Loader, yaml.FullLoader, yaml.UnsafeLoader], node) -> ParameterRange:
     """
     Parse a string in the format start:end:count into a tuple of (start, end, count).
     """

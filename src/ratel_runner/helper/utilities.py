@@ -1,4 +1,4 @@
-from typing import Callable
+from typing import Callable, Optional, Any
 import typer
 
 
@@ -16,3 +16,20 @@ def callback_is_set(value):
     if value is None:
         raise typer.BadParameter("Required CLI option")
     return value
+
+
+class LazyImporter:
+    """Lazy import manager for CLI applications
+
+    From yazyzw.com/optimizing-python-cli-apps-for-speed-my-top-techn/
+    """
+
+    def __init__(self, module_name: str, package: Optional[str] = None):
+        self.module_name = module_name
+        self.package = package
+        self._module = None
+
+    def __getattr__(self, name: str) -> Any:
+        if self._module is None:
+            self._module = __import__(self.module_name, fromlist=[''], level=0)
+        return getattr(self._module, name)

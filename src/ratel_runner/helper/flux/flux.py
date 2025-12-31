@@ -185,6 +185,7 @@ def generate(
         'echo ""',
         'cd "$SCRATCH"',
         f'cp "{options_file}" "$SCRATCH/options.yml"',
+        f'cp "$0" "$SCRATCH/script.sh"',
         f'',
         'echo ""',
         'echo "-->Starting simulation at $(date)"',
