@@ -3,24 +3,42 @@ import rich
 from rich.syntax import Syntax
 from multiprocessing import cpu_count
 from enum import Enum
-import gmsh
-import numpy as np
 import typer
 from typing import Annotated, Optional, ClassVar
 from abc import ABC, abstractmethod
 from types import SimpleNamespace
-import pandas as pd
 import math
+from importlib.util import find_spec
 
 from ...helper.experiment import ExperimentConfig, LogViewType
 from ...helper import config
 from ...helper.flux import flux, machines
-from ...helper.utilities import run_once, callback_is_set
+from ...helper.utilities import run_once, callback_is_set, LazyImporter
 
 from .. import local
 from ..sweep import load_sweep_specification
 
 from .press_boundary import BoundaryType, PressBoundary
+
+
+@run_once
+def check_imports():
+    missing = []
+    for module in ['gmsh', 'numpy', 'pandas']:
+        if find_spec(module) is None:
+            missing.append(module)
+    if missing:
+        raise ModuleNotFoundError(
+            f"Missing required modules for MPM experiments: {', '.join(missing)}. "
+            "Please install the 'ratel-impm-press[mpm]' extra to use this feature."
+        )
+
+
+check_imports()
+
+gmsh = LazyImporter('gmsh')
+np = LazyImporter('numpy')
+pd = LazyImporter('pandas')
 
 
 console = rich.get_console()
@@ -48,11 +66,6 @@ def register_keys():
 
 
 register_keys()
-
-DIE_PIXEL_SIZE_IP01 = 8.434786e-3  # mm/pixel # 8.434786 um/pixel
-# DIE_RADIUS = 2.550608716  # mm # 2550.608716 um, 5_000 / (8.434786 * 2) + 6 pixels
-# DIE_HEIGHT = 8.51913386  # mm # 8519.13386 um, 1010 pixels
-# DIE_CENTER = [2.65695759, 2.65695759, 0]  # [2656.95759, 2656.95759, 0] um, 315, 315, 0 pixels
 
 
 def compute_die_stats(voxel_data, voxel_size: float, buf: int):
